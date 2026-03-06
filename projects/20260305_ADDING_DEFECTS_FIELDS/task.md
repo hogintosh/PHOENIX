@@ -55,9 +55,9 @@ After the defect array is computed:
 
 | Metric | Definition |
 |--------|-----------|
-| Defect fraction | `Σ |defect(i)| × V_cell(i)` / `V_total` |
-| Lack-of-fusion fraction | `Σ V_cell(i) × |k_lof|` where `defect(i)` is negative, divided by `V_total` |
-| Keyhole porosity fraction | `Σ defect(i) × V_cell(i)` where `0 < defect(i) ≤ 1`, divided by `V_total` |
+| Defect fraction | `Σ abs(defect(i)) × V_cell(i) / V_total` |
+| Lack-of-fusion fraction | `Σ abs(defect(i)) × V_cell(i) / V_total` where `defect(i) < 0` |
+| Keyhole porosity fraction | `Σ defect(i) × V_cell(i) / V_total` where `0 < defect(i) ≤ 1` |
 
 > Note: `defect fraction = lack-of-fusion fraction + keyhole porosity fraction`
 
