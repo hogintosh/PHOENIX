@@ -24,7 +24,7 @@ module parameters
 	real(wp) dens, denl, viscos, tsolid, tliquid, tboiling, hsmelt, hlfriz, acpa, acpb, acpl, &
 		thconsa, thconsb, thconl, beta, emiss, dgdtp
 	real(wp) layerheight, pden, pcpa, pcpb, pthcona, pthconb
-	real(wp) delt, timax, urfu, urfv, urfw, urfp, urfh	
+	real(wp) delt, timax, urfu, urfv, urfw, urfp, urfh
 	real(wp) local_half_x, local_half_y, local_depth_z
 	real(wp) xzone(nx1),yzone(ny1),zzone(nz1),powrx(nx1),powry(ny1),powrz(nz1)
 	real(wp) htci, htcj, htck1, htckn, tempWest, tempEast, tempNorth, tempBottom, tempPreheat, tempAmb	
