@@ -21,7 +21,7 @@ module parameters
 	!--------------------------------------------------------------
 	real(wp) alaspow, alaseta, alasrb, alasfact, scanvelx, scanvely
 	real(wp) alaspowvol, alasetavol, sourcerad, sourcedepth
-	real(wp) dens, denl, viscos, tsolid, tliquid, tboiling, hsmelt, hlfriz, acpa, acpb, acpl, &
+	real(wp) dens, denl, viscos, tsolid, tliquid, tboiling, hsmelt, hlfriz, hlatnt, acpa, acpb, acpl, &
 		thconsa, thconsb, thconl, beta, emiss, dgdtp
 	real(wp) layerheight, pden, pcpa, pcpb, pthcona, pthconb
 	real(wp) delt, timax, urfu, urfv, urfw, urfp, urfh
@@ -33,7 +33,7 @@ module parameters
 
 	namelist / process_parameters /alaspow, alaseta, alasrb, alasfact
 	namelist / volumetric_parameters/ alaspowvol, alasetavol, sourcerad, sourcedepth
-	namelist / material_properties /dens, denl, viscos, tsolid, tliquid, tboiling, hsmelt, hlfriz, acpa,acpb, acpl,  &
+	namelist / material_properties /dens, denl, viscos, tsolid, tliquid, tboiling, hlatnt, acpa,acpb, acpl,  &
 		thconsa, thconsb, thconl,  beta, emiss, dgdtp
 	namelist / powder_properties / layerheight, pden, pcpa, pcpb, pthcona, pthconb
 	namelist / numerical_relax / maxit, delt, timax, urfu, urfv, urfw, urfp, urfh
