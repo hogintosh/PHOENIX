@@ -139,7 +139,7 @@ program main
 			t_entot = t_entot + (t1 - t0)
 
 			call cpu_time(t0)
-			call pool_size
+			call pool_size(ilo, ihi, jlo, jhi, klo, khi)
 			call cpu_time(t1)
 			t_dimen = t_dimen + (t1 - t0)
 
@@ -256,10 +256,18 @@ program main
 			endif
 
 !-----convergence criterion------------
-			call cpu_time(t0)
-			call heat_fluxes
-			call cpu_time(t1)
-			t_flux = t_flux + (t1 - t0)
+			if (.not. is_local) then
+				call cpu_time(t0)
+				call heat_fluxes
+				call cpu_time(t1)
+				t_flux = t_flux + (t1 - t0)
+			else
+				! Zero flux diagnostics (heat_fluxes skipped during local steps)
+				flux_west=0.0_wp; flux_east=0.0_wp
+				flux_top=0.0_wp;  flux_bottom=0.0_wp
+				flux_north=0.0_wp; flux_south=0.0_wp
+				heatout=0.0_wp; accul=0.0_wp; heatvol=0.0_wp; ratio=0.0_wp
+			endif
 			amaxres=max(resorm, resoru,resorv,resorw)
 
 			if(toolmatrix(PathNum,5) .ge. laser_on_threshold)then

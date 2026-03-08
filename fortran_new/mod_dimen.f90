@@ -16,13 +16,21 @@ module dimensions
 
 	contains
 
-subroutine pool_size
+subroutine pool_size(ilo, ihi, jlo, jhi, klo, khi)
 
+	integer, intent(in) :: ilo, ihi, jlo, jhi, klo, khi
 	integer i,j,k
+	integer il, ih, jl, jh
 	real(wp) dtdxxinv,dtdzzinv,dtdyyinv,dep, wid
 	real(wp) xxmax,xxmin,yymax,yymin
 
-	tpeak=maxval(temp(1:ni,1:nj,1:nk))
+	! Limit search to given bounds (clipped to interior)
+	il = max(ilo, 2)
+	ih = min(ihi, nim1)
+	jl = max(jlo, 2)
+	jh = min(jhi, njm1)
+
+	tpeak=maxval(temp(il:ih, jl:jh, 2:nkm1))
 	if(tpeak.le.tsolid) then
 		alen=0.0
 		depth=0.0
@@ -35,14 +43,14 @@ subroutine pool_size
 	imin=istart
 	alen=0.0
 
-	do i=istart,nim1
+	do i=istart,ih
 		imax=i
 		if (temp(i,jstart,nk).le.tsolid) exit
 	end do
 	dtdxxinv = (x(imax)-x(imax+1))/(temp(imax,jstart,nk)-temp(imax+1,jstart,nk))
 	xxmax = x(imax) + (tsolid - temp(imax,jstart,nk))*dtdxxinv
 
-	do i=istart,2,-1
+	do i=istart,il,-1
 		imin=i
 		if (temp(i,jstart,nk).lt.tsolid) exit
 	end do
@@ -54,7 +62,7 @@ subroutine pool_size
 	kmin = nkm1
 	depth = 0.0
 
-	outer_depth: do i=2,nim1
+	outer_depth: do i=il,ih
 		do k=nkm1,2,-1
 			if (temp(i,jstart,k).lt.tsolid) cycle outer_depth
 			kmin=min(kmin,k)
@@ -65,7 +73,7 @@ subroutine pool_size
 	if (kmin.eq.1) then
 		depth=z(nk)-z(1)
 	else
-		do i=2,nim1
+		do i=il,ih
 			if (temp(i,jstart,kmin+1).lt.tsolid) cycle
 			dtdzzinv = (z(kmin)-z(kmin-1))/(temp(i,jstart,kmin)-temp(i,jstart,kmin-1))
 			dep = z(nk)-z(kmin)+(temp(i,jstart,kmin)-tsolid)*dtdzzinv
@@ -78,11 +86,11 @@ subroutine pool_size
 	jmax=jstart
 	jmin=jstart
 	width=0.0
-	yymax=y(jstart)  ! Bug fix: initialize yymax before use
+	yymax=y(jstart)
 	yymin=y(jstart)
 
-	outer_jmax: do i=2,nim1
-		do j=jstart,njm1
+	outer_jmax: do i=il,ih
+		do j=jstart,jh
 			if (temp(i,j,nk).lt.tsolid) cycle outer_jmax
 			jmax=max(jmax,j)
 		end do
@@ -90,7 +98,7 @@ subroutine pool_size
 
 	jmax=jmax+1
 	if(jmax.ne.jstart) then
-		do i=2,nim1
+		do i=il,ih
 			if (temp(i,jmax-1,nk).lt.tsolid) cycle
 			dtdyyinv = (y(jmax)-y(jmax+1))/(temp(i,jmax,nk)-temp(i,jmax+1,nk))
 			wid = y(jmax)+(tsolid - temp(i,jmax,nk))*dtdyyinv
@@ -98,8 +106,8 @@ subroutine pool_size
 		end do
 	endif
 
-	outer_jmin: do i=2,nim1
-		do j=jstart,2,-1
+	outer_jmin: do i=il,ih
+		do j=jstart,jl,-1
 			if (temp(i,j,nk).lt.tsolid) cycle outer_jmin
 			jmin=min(jmin,j)
 		end do
@@ -107,7 +115,7 @@ subroutine pool_size
 
 	jmin=jmin-1
 	if(jmin.ne.jstart) then
-		do i=2,nim1
+		do i=il,ih
 			if (temp(i,jmin+1,nk).lt.tsolid) cycle
 			dtdyyinv = (y(jmin)-y(jmin-1))/(temp(i,jmin,nk)-temp(i,jmin-1,nk))
 			wid = y(jmin)+(tsolid - temp(i,jmin,nk))*dtdyyinv
