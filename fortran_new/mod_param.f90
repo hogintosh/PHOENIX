@@ -30,6 +30,7 @@ module parameters
 	real(wp) htci, htcj, htck1, htckn, tempWest, tempEast, tempNorth, tempBottom, tempPreheat, tempAmb	
 	integer nzx, nzy, nzz, maxit, localnum, outputintervel
 	integer ncvx(nx1),ncvy(ny1),ncvz(nz1)
+	character(len=256) :: toolpath_file = './ToolFiles/B26.crs'
 	character(len=128) :: case_name = 'default'
 	character(len=256) :: result_dir = './result/default/'
 	character(len=256) :: file_prefix = './result/default/default_'
@@ -43,7 +44,7 @@ module parameters
 	namelist / boundary_conditions / htci, htcj, htck1, htckn, tempWest, tempEast, tempNorth, &
 		tempBottom, tempPreheat, tempAmb
 	namelist / local_solver / localnum, local_half_x, local_half_y, local_depth_z
-	namelist / output_control / outputintervel, case_name
+	namelist / output_control / outputintervel, case_name, toolpath_file
 
 	contains
 

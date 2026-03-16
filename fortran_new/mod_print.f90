@@ -221,13 +221,20 @@ subroutine Cust_Out
 	enddo
 
 	
-	call write_vtk_vector(41, 'Velocity', auvl, avvl, awvl)
-	call write_vtk_scalar(41, 'T', temp)
-	call write_vtk_scalar(41, 'vis', vis)
-	call write_vtk_scalar(41, 'diff', diff)
-	call write_vtk_scalar(41, 'den', den)
-	call write_vtk_scalar(41, 'solidID', solidfield)
-	call write_vtk_scalar(41, 'local', localfield)
+	call write_vtk_vector(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'Velocity', auvl, avvl, awvl)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'T', temp)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'vis', vis)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'diff', diff)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'den', den)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'solidID', solidfield)
+	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+	                      'local', localfield)
 
 	close(41)
 
@@ -235,14 +242,21 @@ subroutine Cust_Out
 end subroutine Cust_Out
 
 !********************************************************************
-subroutine write_vtk_vector(unit, name, ufield, vfield, wfield)
+subroutine write_vtk_vector(unit, filename, name, ufield, vfield, wfield)
 	integer, intent(in) :: unit
-	character(len=*), intent(in) :: name
+	character(len=*), intent(in) :: filename, name
 	real(wp), intent(in) :: ufield(:,:,:), vfield(:,:,:), wfield(:,:,:)
 	integer i,j,k
 	real(kind=4) :: val4
 
-	write(unit) char(10), 'VECTORS ' // trim(name) // ' float', char(10)
+	! Write ASCII header
+	close(unit)
+	open(unit=unit, file=filename, position='append')
+	write(unit,'(A)') 'VECTORS ' // trim(name) // ' float'
+	close(unit)
+	! Reopen binary for data
+	open(unit=unit, file=filename, access='stream', form='unformatted', &
+	     position='append', convert='big_endian')
 	do k=2,nkm1
 	do j=2,njm1
 	do i=2,nim1
@@ -258,14 +272,22 @@ subroutine write_vtk_vector(unit, name, ufield, vfield, wfield)
 end subroutine write_vtk_vector
 
 !********************************************************************
-subroutine write_vtk_scalar(unit, name, field)
+subroutine write_vtk_scalar(unit, filename, name, field)
 	integer, intent(in) :: unit
-	character(len=*), intent(in) :: name
+	character(len=*), intent(in) :: filename, name
 	real(wp), intent(in) :: field(:,:,:)
 	integer i,j,k
 	real(kind=4) :: val4
 
-	write(unit) char(10), 'SCALARS ' // trim(name) // ' float 1', char(10), 'LOOKUP_TABLE default', char(10)
+	! Write ASCII header
+	close(unit)
+	open(unit=unit, file=filename, position='append')
+	write(unit,'(A)') 'SCALARS ' // trim(name) // ' float 1'
+	write(unit,'(A)') 'LOOKUP_TABLE default'
+	close(unit)
+	! Reopen binary for data
+	open(unit=unit, file=filename, access='stream', form='unformatted', &
+	     position='append', convert='big_endian')
 	do k=2,nkm1
 	do j=2,njm1
 	do i=2,nim1

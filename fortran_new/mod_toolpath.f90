@@ -4,6 +4,7 @@ module toolpath
 !______________________________________________________________________________
 !
 	use laserinput
+	use parameters, only: toolpath_file
 	implicit none
 
 	
@@ -13,7 +14,7 @@ subroutine read_toolpath
 
 	integer i,j,k,status
 
-	open(unit=10,file='./ToolFiles/B26.crs',form='formatted')
+	open(unit=10,file=trim(toolpath_file),form='formatted')
 	
 	i=1
 	do k = 1, TOOLLINES

@@ -28,6 +28,10 @@ module defect_field
 	! --- Laser scanning range (X-Y) ---
 	real(wp) :: x_scan_min, x_scan_max, y_scan_min, y_scan_max
 
+	! --- Convex hull of scanned region ---
+	integer :: n_hull = 0
+	real(wp) :: hull_x(200), hull_y(200)
+
 	contains
 
 !********************************************************************
@@ -83,7 +87,7 @@ subroutine compute_defect_determ()
 		if (max_temp(i,j,k) < tsolid) then
 			defect_arr(i,j,k) = -k_lof
 		else if (max_temp(i,j,k) > tboiling) then
-			defect_arr(i,j,k) = k_kep * (max_temp(i,j,k) - tboiling) / tboiling
+			defect_arr(i,j,k) = min(k_kep * (max_temp(i,j,k) - tboiling) / tboiling, 0.99_wp)
 		else
 			defect_arr(i,j,k) = 0.0_wp
 		endif
@@ -95,13 +99,12 @@ subroutine compute_defect_determ()
 	! Step 2: Determine max laser scanning range from toolpath
 	call compute_scan_range()
 
-	! Step 3: Clean up — zero defect outside scanning range
+	! Step 3: Clean up — zero defect outside scanned region (convex hull)
 	!$OMP PARALLEL DO PRIVATE(i, j, k)
 	do k = k_def_lo, k_def_hi
 	do j = 2, njm1
 	do i = 2, nim1
-		if (x(i) < x_scan_min .or. x(i) > x_scan_max .or. &
-		    y(j) < y_scan_min .or. y(j) > y_scan_max) then
+		if (.not. point_in_scan_region(x(i), y(j))) then
 			defect_arr(i,j,k) = 0.0_wp
 		endif
 	enddo
@@ -119,25 +122,78 @@ end subroutine maxtemp_stochas
 
 !********************************************************************
 subroutine compute_scan_range()
-! Read toolpath to find max laser scanning range in X-Y plane.
-	integer :: n
+! Build scan region polygon from all track endpoints.
+! Left boundary (bottom→top) + right boundary (top→bottom) = CCW polygon.
+	integer :: n, ntracks, i
+	real(wp) :: x1, x2, y1
+	real(wp) :: left_x(TOOLLINES), left_y(TOOLLINES)
+	real(wp) :: right_x(TOOLLINES), right_y(TOOLLINES)
 
-	x_scan_min =  1.0e30_wp
-	x_scan_max = -1.0e30_wp
-	y_scan_min =  1.0e30_wp
-	y_scan_max = -1.0e30_wp
-
-	do n = 1, TOOLLINES
-		if (toolmatrix(n,1) < -0.5_wp) exit   ! end of toolpath data
+	ntracks = 0
+	do n = 2, TOOLLINES
+		if (toolmatrix(n,1) < -0.5_wp) exit
 		if (toolmatrix(n,5) >= laser_on_threshold) then
-			x_scan_min = min(x_scan_min, toolmatrix(n,2))
-			x_scan_max = max(x_scan_max, toolmatrix(n,2))
-			y_scan_min = min(y_scan_min, toolmatrix(n,3))
-			y_scan_max = max(y_scan_max, toolmatrix(n,3))
+			! Track: from n-1 (laser off, start) to n (laser on, end)
+			x1 = toolmatrix(n-1,2)
+			x2 = toolmatrix(n,2)
+			y1 = toolmatrix(n-1,3)   ! same y as toolmatrix(n,3) for x-scan
+			ntracks = ntracks + 1
+			left_x(ntracks)  = min(x1, x2)
+			left_y(ntracks)  = y1
+			right_x(ntracks) = max(x1, x2)
+			right_y(ntracks) = y1
 		endif
 	enddo
 
+	if (ntracks == 0) return
+
+	! Build CCW polygon: right boundary (bottom→top) + left boundary (top→bottom)
+	n_hull = 0
+	do i = 1, ntracks
+		n_hull = n_hull + 1
+		hull_x(n_hull) = right_x(i)
+		hull_y(n_hull) = right_y(i)
+	enddo
+	do i = ntracks, 1, -1
+		n_hull = n_hull + 1
+		hull_x(n_hull) = left_x(i)
+		hull_y(n_hull) = left_y(i)
+	enddo
+
+	! AABB for reporting
+	x_scan_min = minval(left_x(1:ntracks))
+	x_scan_max = maxval(right_x(1:ntracks))
+	y_scan_min = left_y(1)
+	y_scan_max = left_y(ntracks)
+
 end subroutine compute_scan_range
+
+!********************************************************************
+function point_in_scan_region(px, py) result(inside)
+! Check if point (px, py) is inside the convex hull using cross-product test.
+! Hull vertices must be in counter-clockwise order.
+	real(wp), intent(in) :: px, py
+	logical :: inside
+	integer :: i, j
+	real(wp) :: cross
+
+	inside = .true.
+	if (n_hull < 3) then
+		inside = .false.
+		return
+	endif
+
+	do i = 1, n_hull
+		j = mod(i, n_hull) + 1
+		cross = (hull_x(j) - hull_x(i)) * (py - hull_y(i)) - &
+		        (hull_y(j) - hull_y(i)) * (px - hull_x(i))
+		if (cross < -1.0e-15_wp) then
+			inside = .false.
+			return
+		endif
+	enddo
+
+end function point_in_scan_region
 
 !********************************************************************
 subroutine write_defect_report()
@@ -159,8 +215,7 @@ subroutine write_defect_report()
 	do k = k_def_lo, k_def_hi
 	do j = 2, njm1
 	do i = 2, nim1
-		if (x(i) < x_scan_min .or. x(i) > x_scan_max .or. &
-		    y(j) < y_scan_min .or. y(j) > y_scan_max) cycle
+		if (.not. point_in_scan_region(x(i), y(j))) cycle
 		v_cell = volume(i,j,k)
 		v_total = v_total + v_cell
 		if (defect_arr(i,j,k) < 0.0_wp) then
@@ -199,9 +254,14 @@ subroutine write_defect_report()
 	write(lun,'(a,es12.5,a)') '  Keyhole porosity volume:    ', v_kep, ' m^3'
 	write(lun,'(a,es12.5,a)') '  Total reference volume:     ', v_total, ' m^3'
 	write(lun,'(a)')
-	write(lun,'(a)') '  Max laser scanning range (X-Y plane):'
+	write(lun,'(a)') '  Bounding box (X-Y plane):'
 	write(lun,'(a,es12.5,a,es12.5,a)') '    X: [', x_scan_min, ', ', x_scan_max, '] m'
 	write(lun,'(a,es12.5,a,es12.5,a)') '    Y: [', y_scan_min, ', ', y_scan_max, '] m'
+	write(lun,'(a)')
+	write(lun,'(a,i0,a)') '  Scan region convex hull (', n_hull, ' vertices):'
+	do i = 1, n_hull
+		write(lun,'(a,i2,a,es12.5,a,es12.5,a)') '    ', i, ':  (', hull_x(i), ', ', hull_y(i), ') m'
+	enddo
 	write(lun,'(a)')
 	write(lun,'(a)') '  Layer Z range:'
 	write(lun,'(a,i4,a,i4)') '    k indices: ', k_def_lo, ' to ', k_def_hi
@@ -267,15 +327,16 @@ subroutine write_defect_vtk(fieldname, field)
 	enddo
 	close(lun)
 
-	! POINT_DATA header
+	! POINT_DATA + SCALARS + LOOKUP_TABLE headers (ASCII)
 	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk', position='append')
 	write(lun,'(A,I0)') 'POINT_DATA ', npts
+	write(lun,'(A)') 'SCALARS '//trim(fieldname)//' float 1'
+	write(lun,'(A)') 'LOOKUP_TABLE default'
 	close(lun)
 
 	! Binary field data
 	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk', &
 	     access='stream', form='unformatted', position='append', convert='big_endian')
-	write(lun) char(10), 'SCALARS '//trim(fieldname)//' float 1', char(10), 'LOOKUP_TABLE default', char(10)
 	do k = k_def_lo, k_def_hi
 	do j = 2, njm1
 	do i = 2, nim1

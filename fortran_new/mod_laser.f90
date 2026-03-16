@@ -41,8 +41,9 @@ subroutine laser_beam
 
 	scanvelx=(toolmatrix(PathNum,2)-toolmatrix(PathNum-1,2))/(toolmatrix(PathNum,1)-toolmatrix(PathNum-1,1))
 	scanvely=(toolmatrix(PathNum,3)-toolmatrix(PathNum-1,3))/(toolmatrix(PathNum,1)-toolmatrix(PathNum-1,1))
-	beam_pos = beam_pos + delt*scanvelx 
-	beam_posy = beam_posy+ delt*scanvely
+	! Direct interpolation from toolpath waypoints (no accumulated drift)
+	beam_pos  = toolmatrix(PathNum-1,2) + scanvelx * (timet - toolmatrix(PathNum-1,1))
+	beam_posy = toolmatrix(PathNum-1,3) + scanvely * (timet - toolmatrix(PathNum-1,1))
 	
 
 	iout=1            !reserve intial index of x[]
