@@ -21,15 +21,14 @@ Create `mod_species.f90` in fortran_new based on `D:\Fortran\dissimilar\program9
 
 ## Inline Computation Strategy (replaces Phase 0 array approach)
 
-**Rationale**: The Phase 0 approach (16 per-cell property arrays, ~513 MB overhead, +12% runtime) was implemented and reverted. Instead, all composition-dependent properties are computed inline inside hot loops using local variables:
+**Rationale**: The Phase 0 approach (16 per-cell property arrays, ~513 MB overhead, +12% runtime) was implemented and reverted. Instead, all composition-dependent properties are computed inline using a helper function `mix(prop1, prop2, C)` defined in `mod_species.f90`.
 
+**Helper function** (defined in `mod_species.f90`):
 ```fortran
-! Example: in properties() when species_flag=1
-C_local = concentration(i,j,k)
-tsolid_local  = tsolid  * C_local + tsolid2  * (1.0_wp - C_local)
-tliquid_local = tliquid * C_local + tliquid2 * (1.0_wp - C_local)
-dens_local    = dens    * C_local + dens2    * (1.0_wp - C_local)
-! ... etc. for all properties used in this routine
+pure real(wp) function mix(prop1, prop2, C)
+    real(wp), intent(in) :: prop1, prop2, C
+    mix = prop1 * C + prop2 * (1.0_wp - C)
+end function mix
 ```
 
 When `species_flag=0`, the original scalar code paths remain untouched — no `if` checks, no concentration lookups, no overhead.
@@ -40,14 +39,18 @@ When `species_flag=0`, the original scalar code paths remain untouched — no `i
 - No compile-order dependency changes
 - Properties stay "live" — always consistent with current concentration (no stale array risk)
 - Code changes confined to the `species_flag=1` branch — existing single-material behavior is untouched
+- `mix()` function keeps code DRY — no repeated `prop1*C + prop2*(1-C)` patterns
 
 **Implementation pattern for modified routines** (properties, enthalpy_to_temp, source_momentum, source_pp, velocity zeroing):
 ```fortran
+use species, only: concentration, species_flag, mix, tsolid2, tliquid2, ...
+
 if (species_flag == 1) then
-    ! Composition-dependent path: compute local properties from C
     C_local = concentration(i,j,k)
-    tsolid_local = tsolid * C_local + tsolid2 * (1.0_wp - C_local)
-    ! ... use tsolid_local in branching and computation
+    tsolid_local  = mix(tsolid,  tsolid2,  C_local)
+    tliquid_local = mix(tliquid, tliquid2, C_local)
+    dens_local    = mix(dens,    dens2,    C_local)
+    ! ... etc.
 else
     ! Original scalar path (unchanged)
     ! ... use tsolid directly
@@ -89,7 +92,7 @@ endif
      dens2=8880, denl2=7800, viscos2=0.003,
      tsolid2=1728, tliquid2=1803, tboiling2=3650,
      acpa2=0.3441, acpb2=400, acpl2=800,
-     thconsa2=0.0205, thconsb2=10, thconl2=120
+     thconsa2=0.0205, thconsb2=10, thconl2=120， D_m = 5.0e-9
      ! Powder properties
      pden2=7330, pcpa2=0.3508, pcpb2=457.7, pthcona2=0, pthconb2=0.795
      ```
@@ -104,6 +107,7 @@ endif
    - `dgdc_const` (dg/dC, surface tension concentration coefficient)
    - Allocatable arrays: `concentration(:,:,:)`, `conc_old(:,:,:)`
    - No `massdiffusivity` array — use `den(i,j,k) * D_m` inline (den already computed in `properties()`, D_m is scalar constant)
+   - `pure function mix(prop1, prop2, C)` — linear mixing helper, used by all modified routines
    - Empty subroutine stubs: `allocate_species`, `init_species`, `solve_species`, `species_bc`, `write_species_vtk`
    - Compiles but does nothing yet
 
@@ -145,55 +149,86 @@ endif
    - Add `resorc` to output line
    - Add species solve time to timing report
 
-### Phase 3: Material property coupling (inline approach)
+8. [ ] **`enhance_species_speed` block correction**
+   - Port from `program931/species_transport.f90` (lines 174-224), same pattern as `enhance_converge_speed` in `mod_converge.f90`
+   - After TDMA solve, accumulate coefficients along j-k planes into a 1D system along x, solve with TDMA, broadcast correction `delC(i)` to all `(i,j,k)`
+   - Accelerates large-scale convergence without changing the final solution
+   - Add to `solve_species` after the line-by-line TDMA sweep
+   - **OpenMP**: parallelize the j-k accumulation loop
 
-8. [ ] **Modify `properties()` in `mod_prop.f90` for composition-dependent properties**
-   - When `species_flag=1`, compute all properties inline from `concentration(i,j,k)`:
-     ```fortran
-     use species, only: concentration, species_flag, tsolid2, tliquid2, ...
-     ! Inside loop:
-     if (species_flag == 1) then
-         C_local = concentration(i,j,k)
-         tsolid_local  = tsolid  * C_local + tsolid2  * (1.0_wp - C_local)
-         tliquid_local = tliquid * C_local + tliquid2 * (1.0_wp - C_local)
-         dens_local    = dens    * C_local + dens2    * (1.0_wp - C_local)
-         denl_local    = denl    * C_local + denl2    * (1.0_wp - C_local)
-         viscos_local  = viscos  * C_local + viscos2  * (1.0_wp - C_local)
-         ! ... all cp, thcon, powder properties similarly
-     else
-         tsolid_local = tsolid; tliquid_local = tliquid; ...
-     endif
-     ```
-   - Use local variables for branching (`tsolid_local`, `tliquid_local`) and property computation
-   - Three temperature regimes use locally-mixed properties
-   - `beta`, `emiss`, `hlatnt`, `dgdt` remain scalars
+### Milestone: One-way coupling validation
 
-9. [ ] **Modify `enthalpy_to_temp()` in `mod_entot.f90` for composition-dependent H-T curve**
-   - When `species_flag=1`, compute `hsmelt_local`, `hlcal_local`, `deltemp_local` from mixed `acpa`, `acpb`, `tsolid`, `tliquid`, `acpl`
-   - When `species_flag=0`, use original scalars `hsmelt`, `hlcal`, `deltemp`, `acpl`, `tsolid`, `tliquid` (unchanged)
-
-10. [ ] **Modify `source_momentum`/`source_pp` in `mod_sour.f90` for composition-dependent branching**
-    - When `species_flag=1`:
-      - Darcy: `darcy_c0` computed cell-locally using mixed viscosity
-      - Buoyancy: uses mixed `dens_local * g * beta * (tw - tsolid_local)`
-      - Solid check: uses mixed `tsolid_local`
-    - When `species_flag=0`: original scalar code (unchanged)
-
-11. [ ] **Modify velocity zeroing in `main.f90`**
-    - When `species_flag=1`: compute `tsolid_local` from `concentration(i,j,k)` for the `temp <= tsolid` check
-    - When `species_flag=0`: use scalar `tsolid` (unchanged, current code)
-    - Also: `if(tpeak > min(tsolid, tsolid2))` for momentum activation check
-
-### Phase 4: Output and Marangoni
-
-12. [ ] **Implement `write_species_vtk`**
+9. [ ] **Implement `write_species_vtk`**
     - Write concentration field as standalone VTK file (same format as defect VTK)
     - ASCII header + binary data, structured grid
     - Called at same frequency as `Cust_Out` (every `outputintervel` steps)
     - Filename: `{case_name}_species{N}.vtk`
     - Also add concentration as a scalar in main VTK output (`Cust_Out`)
 
-13. [ ] **Solutal Marangoni effect (dgdc)**
+10. [ ] **Create single-track test toolpath**
+    - Generate a simple single-track toolpath scanning along x-direction at y = half of domain
+    - Use `toolpath_generator_rectangle.py` with 1 track (or write manually)
+    - Purpose: test species transport with laser scanning across the material interface
+
+11. [ ] **One-way coupling validation run**
+    - At this point: concentration field is computed and advected, but does NOT feed back into material properties (one-way coupling). Changes to original codebase are limited to `species_flag` gating — no physics changes when `species_flag=0`.
+    - Run the same test case twice: `species_flag=0` (baseline) and `species_flag=1` (species active)
+    - **Correctness checks**:
+      - `species_flag=0`: results must be bit-identical to the original code (no regression)
+      - `species_flag=1`: concentration stays in [0,1], mixing occurs only in melt pool
+      - Compare defect output, thermal history, and `output.txt` between flag=0 and flag=1 — should be identical (since one-way coupling does not modify thermal/flow fields)
+    - **Performance checks**:
+      - Compare timing reports (`timing_report.txt`): wall time, per-iteration time
+      - Compare memory reports (`memory_report.txt`): VmHWM, VmRSS
+      - Document overhead of species solver (acceptable target: <5% wall time increase)
+    - **OpenMP check**: verify species solver loops use `!$OMP PARALLEL` correctly, confirm scaling with thread count
+    - **VTK check**: species VTK output readable in ParaView, concentration field visualization makes physical sense
+
+### Phase 3: Two-way coupling (material property feedback)
+
+12. [ ] **Modify `properties()` in `mod_prop.f90` for composition-dependent properties**
+    - When `species_flag=1`, use `mix()` from `mod_species.f90` to compute local properties:
+      ```fortran
+      use species, only: concentration, species_flag, mix, tsolid2, tliquid2, ...
+      ! Inside loop:
+      if (species_flag == 1) then
+          C_local = concentration(i,j,k)
+          tsolid_local  = mix(tsolid,  tsolid2,  C_local)
+          tliquid_local = mix(tliquid, tliquid2, C_local)
+          dens_local    = mix(dens,    dens2,    C_local)
+          denl_local    = mix(denl,    denl2,    C_local)
+          viscos_local  = mix(viscos,  viscos2,  C_local)
+          ! ... all cp, thcon, powder properties similarly
+      else
+          tsolid_local = tsolid; tliquid_local = tliquid; ...
+      endif
+      ```
+    - Use local variables for branching (`tsolid_local`, `tliquid_local`) and property computation
+    - Three temperature regimes use locally-mixed properties
+    - `beta`, `emiss`, `hlatnt`, `dgdt` remain scalars
+    - **OpenMP**: ensure all `mix()` calls use thread-private local variables, no shared writes
+
+13. [ ] **Modify `enthalpy_to_temp()` in `mod_entot.f90` for composition-dependent H-T curve**
+    - When `species_flag=1`, use `mix()` to compute `acpa_local`, `acpb_local`, `tsolid_local`, `tliquid_local`, `acpl_local`, then derive `hsmelt_local`, `hlcal_local`, `deltemp_local`
+    - When `species_flag=0`, use original scalars `hsmelt`, `hlcal`, `deltemp`, `acpl`, `tsolid`, `tliquid` (unchanged)
+    - **OpenMP**: all derived locals must be `PRIVATE` in the parallel region
+
+14. [ ] **Modify `source_momentum`/`source_pp` in `mod_sour.f90` for composition-dependent branching**
+    - When `species_flag=1`:
+      - Darcy: `darcy_c0` computed cell-locally using `mix(viscos, viscos2, C_local)`
+      - Buoyancy: uses `mix(dens, dens2, C_local) * g * beta * (tw - tsolid_local)`
+      - Solid check: uses `mix(tsolid, tsolid2, C_local)`
+    - When `species_flag=0`: original scalar code (unchanged)
+    - **OpenMP**: `darcy_c0` becomes a loop-local variable (move from before-loop to inside-loop), add to `PRIVATE` clause
+
+15. [ ] **Modify velocity zeroing in `main.f90`**
+    - When `species_flag=1`: use `mix(tsolid, tsolid2, concentration(i,j,k))` for the `temp <= tsolid` check
+    - When `species_flag=0`: use scalar `tsolid` (unchanged, current code)
+    - Also: `if(tpeak > min(tsolid, tsolid2))` for momentum activation check
+
+### Phase 4: Solutal Marangoni
+
+16. [ ] **Solutal Marangoni effect (dgdc)**
     - Define `dgdc` as a scalar constant in `mod_species.f90` (dg/dC, surface tension concentration coefficient)
     - Analogous to thermal Marangoni (`dgdt * dT/dx`), solutal Marangoni is `dgdc * dC/dx`
     - Total surface tension force: `tau = dgdt * grad(T) + dgdc * grad(C)`
@@ -208,23 +243,13 @@ endif
       ```
       Same pattern for case 2 (v-velocity, dC/dy)
 
-### Phase 5: Testing
+### Phase 5: Two-way coupling validation
 
-14. [ ] **Create single-track test toolpath**
-    - Generate a simple single-track toolpath scanning along x-direction at y = half of domain
-    - Use `toolpath_generator_rectangle.py` with 1 track (or write manually)
-    - Purpose: test species transport with laser scanning across the material interface
-
-15. [ ] **Validation run**
-    - Run single-track test with `species_flag=1`
-    - Verify: concentration stays in [0,1], mixing occurs only in melt pool, material properties update correctly, VTK output readable in ParaView
-    - Compare melt pool shape with `species_flag=0` to verify minimal impact when C=1 everywhere
-
-### Optional / Future
-
-16. [ ] **`enhance_species_speed` block correction**
-    - Port 1D block-correction from program931 for faster convergence
-    - Not required for correctness, but improves convergence speed
+17. [ ] **Two-way coupling validation run**
+    - Run single-track test with `species_flag=1` (now with full two-way coupling)
+    - Verify: material properties update correctly from concentration, melt pool shape changes compared to single-material
+    - Compare timing/memory with one-way coupling results to quantify Phase 3 overhead
+    - Verify OpenMP scaling is maintained (no serialization from `mix()` calls)
 
 ## Design Notes
 
