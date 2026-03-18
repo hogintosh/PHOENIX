@@ -1,0 +1,12 @@
+*.suo
+*.aps
+*.obj
+*.mod
+*.exe
+*.pdb
+*.res
+*.manifest
+*/Debug/
+*/Release/
+*/x64/
+**/result/

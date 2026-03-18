@@ -27,5 +27,5 @@
 
 &local_solver localnum=4, local_half_x=1.0e-3, local_half_y=2.0e-4, local_depth_z=2.0e-4 /
 
-&output_control outputintervel=20, case_name='sp_slow', toolpath_file='./ToolFiles/species_test.crs', species_flag=1 /
+&output_control outputintervel=20, case_name='PLACEHOLDER', toolpath_file='./ToolFiles/species_test.crs', species_flag=0 /
 

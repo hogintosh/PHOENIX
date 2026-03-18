@@ -1,0 +1,200 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+DIALOG1 DIALOG DISCARDABLE  0, 0, 280, 184
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Welcome!"
+FONT 12, "Times New Roman"
+BEGIN
+    CTEXT           "Calculation of Heat and Mass Transfer in Conduction mode",
+                    IDC_STATIC,50,19,181,8
+    CTEXT           "Laser Welding of Dissimilar metals",IDC_STATIC,83,34,102,
+                    8
+    CTEXT           "Version 1.0",IDC_STATIC,110,56,43,8
+    CTEXT           "Y. Hu and X. He",IDC_STATIC,86,86,95,8
+    CTEXT           "Institute of Mechanics",
+                    IDC_STATIC,49,102,163,8
+    LTEXT           "Chinese Academy of Sciences, P.R.China",IDC_STATIC,78,118,
+                    181,8
+    PUSHBUTTON      "Start",start,107,143,50,14
+END
+
+DIALOG2 DIALOG DISCARDABLE  0, 0, 309, 216
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Input parameters"
+FONT 12, "Times New Roman"
+BEGIN
+    LTEXT           "Input file:",IDC_STATIC,25,9,25,8
+    LTEXT           "Output file:",IDC_STATIC,105,9,30,8
+    LTEXT           "Tecplot output file:",IDC_STATIC,185,9,51,8
+    LTEXT           "Alloy composition (wt%):",IDC_STATIC,25,34,69,8
+    LTEXT           "Choose shielding gas:",IDC_STATIC,25,54,58,8
+    LTEXT           "Diameter of nozzle (cm):",IDC_STATIC,25,74,66,8
+    LTEXT           "Gas flow rate (cm^3/s):",IDC_STATIC,25,94,64,8
+    LTEXT           "Welding speed (cm/s):",IDC_STATIC,25,114,61,8
+    LTEXT           "Density of the alloy (gm/cm^3):",IDC_STATIC,25,134,85,8
+    LTEXT           "Plasma factor (0 to 1.0):",IDC_STATIC,25,154,66,8
+    LTEXT           "Number of iterations:",IDC_STATIC,25,174,57,8
+    LTEXT           "Location of beam on x-axis (cm):",IDC_STATIC,25,194,90,
+                    8
+    EDITTEXT        edit_inf,55,9,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_outf,140,9,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_tec,240,9,40,14,ES_AUTOHSCROLL
+    LTEXT           "Fe:",IDC_STATIC,106,34,9,8
+    LTEXT           "Mn:",IDC_STATIC,150,34,12,8
+    LTEXT           "Cr:",IDC_STATIC,197,34,9,8
+    LTEXT           "Ni:",IDC_STATIC,241,34,9,8
+    EDITTEXT        edit_fe,119,34,25,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_mn,165,34,26,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_cr,210,34,25,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_ni,256,34,24,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_nozzle,160,72,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_gasflow,160,92,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_speed,160,112,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_density,160,132,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_plasma,160,152,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_iteration,160,172,40,14,ES_AUTOHSCROLL
+    EDITTEXT        edit_beamloc,160,192,40,14,ES_AUTOHSCROLL
+    LTEXT           "He:",IDC_STATIC,160,55,10,8
+    LTEXT           "Ar:",IDC_STATIC,205,55,9,8
+    CONTROL         "",check_he,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,175,55,
+                    16,8
+    CONTROL         "",check_ar,"Button",BS_AUTOCHECKBOX | WS_TABSTOP,220,55,
+                    16,8
+    PUSHBUTTON      "Calculate",calculate,232,192,50,14
+END
+
+DIALOG3 DIALOG DISCARDABLE  0, 0, 314, 166
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Output"
+FONT 12, "Times New Roman"
+BEGIN
+    LTEXT           "Base metal composition (wt%):",IDC_STATIC,20,30,85,8
+    LTEXT           "Vaporization  rates (gm/s):",IDC_STATIC,20,55,70,8
+    LTEXT           "Weld metal composition (wt%):",IDC_STATIC,20,80,86,8
+    LTEXT           "Composition change (wt%):",IDC_STATIC,20,105,76,8
+    LTEXT           "Iron",IDC_STATIC,134,10,12,8
+    LTEXT           "Manganese",IDC_STATIC,169,10,32,8
+    LTEXT           "Chromium",IDC_STATIC,215,10,29,8
+    LTEXT           "Nickel",IDC_STATIC,264,10,19,8
+    EDITTEXT        IDC_EDIT1,120,25,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT2,165,25,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT3,210,25,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT4,255,25,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT5,120,50,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT6,165,50,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT7,210,50,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT8,255,50,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT9,120,75,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT10,165,75,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT11,210,75,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT12,255,75,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT13,120,100,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT14,165,100,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT15,210,100,40,14,ES_AUTOHSCROLL
+    EDITTEXT        IDC_EDIT16,255,100,40,14,ES_AUTOHSCROLL
+    PUSHBUTTON      "Another calculation",Another,60,132,60,14
+    PUSHBUTTON      "Exit",Quit,200,132,55,14
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    DIALOG1, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 273
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 177
+    END
+
+    DIALOG2, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 302
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 209
+    END
+
+    DIALOG3, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 307
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 159
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+

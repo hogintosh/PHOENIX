@@ -12,6 +12,7 @@ module residue
 	implicit none
 
 	real(wp) resoru,resorv,resorw,resorh  !residual error of u v w h
+	real(wp) resorc  !residual error of species concentration
 	contains
 
 !********************************************************************

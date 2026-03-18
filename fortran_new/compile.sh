@@ -31,6 +31,7 @@ gfortran -fopenmp -O3 -march=native -c \
     mod_resid.f90 \
     mod_revise.f90 \
     mod_solve.f90 \
+    mod_species.f90 \
     mod_print.f90 \
     mod_converge.f90 \
     mod_toolpath.f90 \

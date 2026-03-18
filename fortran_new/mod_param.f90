@@ -44,7 +44,8 @@ module parameters
 	namelist / boundary_conditions / htci, htcj, htck1, htckn, tempWest, tempEast, tempNorth, &
 		tempBottom, tempPreheat, tempAmb
 	namelist / local_solver / localnum, local_half_x, local_half_y, local_depth_z
-	namelist / output_control / outputintervel, case_name, toolpath_file
+	integer species_flag
+	namelist / output_control / outputintervel, case_name, toolpath_file, species_flag
 
 	contains
 
@@ -52,6 +53,7 @@ subroutine read_data
 
 	integer i,j,k
 
+	species_flag = 0  ! default: no species transport
 	open(unit=10,file='./inputfile/input_param.txt',form='formatted')
 	
 !-----geometrical parameters-------------------------------

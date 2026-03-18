@@ -12,6 +12,7 @@ module printing
 	use laserinput
 	use boundary
 	use field_data
+	use species, only: concentration
 
 	implicit none
 	integer itertot,niter  !main   
@@ -68,12 +69,18 @@ subroutine outputres
 
 
 
-		write(9,3)timet,niter,aAveSec,itertot,resorh,resorm,resoru,resorv,resorw
+		if (species_flag == 1) then
+			write(9,3)timet,niter,aAveSec,itertot,resorh,resorm,resoru,resorv,resorw,resorc
+		else
+			write(9,31)timet,niter,aAveSec,itertot,resorh,resorm,resoru,resorv,resorw
+		endif
 		write(9,5)tpeak,umax,vmax,wmax,alen,depth,width
 		write(9,2)flux_north,flux_south,ahtoploss,ahtoploss,flux_bottom,flux_west,flux_east,heatout,accul,heatinLaser,heatvol,ratio
 		write(9,7)100.0_wp*timet/timax,coordhistory(1,2),coordhistory(1,3),coordhistory(1,4), &
 			coordhistory(1,5),coordhistory(1,6),coordhistory(1,7),coordhistory(1,8)
-3		format('  time  iter  time/iter  tot_iter  res_enth  res_mass     res_u   res_v   res_w',/, &
+3		format('  time  iter  time/iter  tot_iter  res_enth  res_mass     res_u   res_v   res_w  res_spec',/, &
+		es9.2,1x,i4,2x,f7.3,3x,i7,2x,es8.1,2x,es8.1,1x,(4(es8.1,1x)))
+31		format('  time  iter  time/iter  tot_iter  res_enth  res_mass     res_u   res_v   res_w',/, &
 		es9.2,1x,i4,2x,f7.3,3x,i7,2x,es8.1,2x,es8.1,1x,(3(es8.1,1x)))
 2		format('  north  south  top  toploss  bottom  west  east  hout  accu  hin heatvol ratio',/, &
 		3(f7.1),4(f7.1),4(f6.1),f7.2)
@@ -236,6 +243,11 @@ subroutine Cust_Out
 	call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
 	                      'local', localfield)
 
+	if (species_flag == 1) then
+		call write_vtk_scalar(41, trim(file_prefix)//'vtkmov'//trim(adjustl(cTemp))//'.vtk', &
+		                      'concentration', concentration)
+	endif
+
 	close(41)
 
 
@@ -351,9 +363,6 @@ subroutine OpenFiles
 
 	
 	open(unit=9,file=trim(file_prefix)//'output.txt')
-
-
-	write(41,*)'TITLE = "Thermo-Capillary Flow in Laser-Generated Melt Pool"'
 
 end subroutine OpenFiles
 

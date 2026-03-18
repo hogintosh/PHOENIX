@@ -32,6 +32,8 @@ program main
 	use omp_lib
 	use local_enthalpy
 	use defect_field
+	use species, only: allocate_species, init_species, &
+		species_bc, solve_species, concentration, conc_old
 
 	implicit none
 	integer i,j,k
@@ -55,6 +57,11 @@ program main
 	call OpenFiles
 	call initialize
 	call init_thermal_history
+
+	if (species_flag == 1) then
+		call allocate_species
+		call init_species
+	endif
 
 	call StartTime
 	wall_start = omp_get_wtime()
@@ -286,6 +293,15 @@ program main
 
 		end do iter_loop
 
+!-----species transport (once per timestep, after iter_loop)-----
+		if (species_flag == 1) then
+			call cpu_time(t0)
+			call species_bc
+			call solve_species
+			call cpu_time(t1)
+			t_species = t_species + (t1 - t0)
+		endif
+
 		call cpu_time(t0)
 		call update_skipped(ilo, ihi, jlo, jhi, klo, khi, is_local)
 		call cpu_time(t1)
@@ -386,6 +402,7 @@ program main
 			enddo
 			!$OMP END PARALLEL DO
 		endif
+		if (species_flag == 1) conc_old = concentration
 		call Cust_Out
 		call write_thermal_history(timet)
 		call cpu_time(t1)

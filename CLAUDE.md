@@ -70,6 +70,7 @@ python3 toolpath_generator_rectangle.py --test
 ```
 
 Output: `.crs` file (time, x, y, z, laser on/off) + `.png` visualization.
+- `.png` is only generated when using `toolpath_generator_rectangle.py` — manually created `.crs` files do not have a `.png`.
 
 ## Project Management
 
@@ -89,6 +90,8 @@ Output: `.crs` file (time, x, y, z, laser on/off) + `.png` visualization.
 
 - All code comments and documentation in English
 - One module per `.f90` file, named `mod_<name>.f90`
+- `fortran_new/` is the active development folder — all code changes go here
+- `legacy/` is read-only reference code — **never modify** files in `legacy/`
 - Do not modify Fortran source code unless the task explicitly requires it
 - When adding features, minimize impact on existing modules
 - Prefer editing existing files over creating new ones
