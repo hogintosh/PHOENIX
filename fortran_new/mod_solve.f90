@@ -6,6 +6,7 @@ module solver
 	use initialization
 	use parameters
 	use dimensions
+	use species, only: concentration, mix, tsolid2
 	
 	! Set .true. to use tdma_solve_3d_2 for comparison; .false. = original tdma_solve_3d
 	logical, parameter :: use_tdma2 = .true.
@@ -166,18 +167,24 @@ subroutine cleanuvw
 	implicit none
 	integer i,j,k
 	real(wp) tulc,tvlc,twlc
+	real(wp) tsolid_l
 
 	do k=kstat,nkm1
-!$OMP PARALLEL PRIVATE(tulc, tvlc, twlc)
+!$OMP PARALLEL PRIVATE(tulc, tvlc, twlc, tsolid_l)
 !$OMP DO
 	do j=jstat,jend
 	do i=istatp1,iendm1
+		if (species_flag == 1) then
+			tsolid_l = mix(tsolid, tsolid2, concentration(i,j,k))
+		else
+			tsolid_l = tsolid
+		endif
 		tulc=min(temp(i,j,k),temp(i+1,j,k))
 		tvlc=min(temp(i,j,k),temp(i,j+1,k))
 		twlc=min(temp(i,j,k),temp(i,j,k+1))
-		if(tulc.le.tsolid) uVel(i+1,j,k)=0.0
-		if(tvlc.le.tsolid) vVel(i,j+1,k)=0.0
-		if(twlc.le.tsolid) wVel(i,j,k+1)=0.0
+		if(tulc.le.tsolid_l) uVel(i+1,j,k)=0.0
+		if(tvlc.le.tsolid_l) vVel(i,j+1,k)=0.0
+		if(twlc.le.tsolid_l) wVel(i,j,k+1)=0.0
 
 		if(temp(i,j,nk) .ge. tboiling)then
 			uVel(i,j,k)=0.0

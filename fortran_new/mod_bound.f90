@@ -8,6 +8,7 @@ module boundary
 	use laserinput
 	use dimensions
 	use cfd_utils
+	use species, only: concentration, dgdc_const
 
 	implicit none
 
@@ -20,7 +21,7 @@ module boundary
 subroutine bound_uv(idir)
 	integer, intent(in) :: idir
 	integer i,j
-	real(wp) dtd,fracl_stag,vis1,term1
+	real(wp) dtd,dcd,fracl_stag,vis1,term1
 
 !-----k=nk (Marangoni stress on top surface)
 	do j=jstat,jend
@@ -31,12 +32,20 @@ subroutine bound_uv(idir)
 			fracl_stag=fracl(i,j,nk)*(1.0-fracx(i-1))+fracl(i-1,j,nk)*fracx(i-1)
 			vis1 = harmonic_mean(vis(i,j,nkm1), vis(i-1,j,nkm1), 1.0-fracx(i-1))
 			term1=fracl_stag*dgdt*dtd/(vis1*dzpbinv(nk))
+			if (species_flag == 1) then
+				dcd=(concentration(i,j,nk)-concentration(i-1,j,nk))*dxpwinv(i)
+				term1=term1+fracl_stag*dgdc_const*dcd/(vis1*dzpbinv(nk))
+			endif
 			uVel(i,j,nk)=uVel(i,j,nkm1)+term1
 		case(2)
 			dtd=(temp(i,j,nk)-temp(i,j-1,nk))*dypsinv(j)
 			fracl_stag=fracl(i,j,nk)*(1.0-fracy(j-1))+fracl(i,j-1,nk)*fracy(j-1)
 			vis1 = harmonic_mean(vis(i,j,nkm1), vis(i,j-1,nkm1), 1.0-fracy(j-1))
 			term1=fracl_stag*dgdt*dtd/(vis1*dzpbinv(nk))
+			if (species_flag == 1) then
+				dcd=(concentration(i,j,nk)-concentration(i,j-1,nk))*dypsinv(j)
+				term1=term1+fracl_stag*dgdc_const*dcd/(vis1*dzpbinv(nk))
+			endif
 			vVel(i,j,nk)=vVel(i,j,nkm1)+term1
 		end select
 	enddo

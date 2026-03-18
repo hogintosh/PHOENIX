@@ -33,7 +33,8 @@ program main
 	use local_enthalpy
 	use defect_field
 	use species, only: allocate_species, init_species, &
-		species_bc, solve_species, concentration, conc_old
+		species_bc, solve_species, concentration, conc_old, &
+		mix, tsolid2
 
 	implicit none
 	integer i,j,k
@@ -152,7 +153,7 @@ program main
 			call cpu_time(t1)
 			t_dimen = t_dimen + (t1 - t0)
 
-			if(tpeak.gt.tsolid) then
+			if(tpeak.gt.merge(min(tsolid,tsolid2), tsolid, species_flag==1)) then
 				call cpu_time(t0)
 				call cleanuvw
 				call cpu_time(t1)
@@ -342,7 +343,7 @@ program main
 			do k=1,nk
 			do j=1,nj
 			do i=1,ni
-				if(temp(i,j,k).le.tsolid) then
+				if(temp(i,j,k).le.merge(mix(tsolid,tsolid2,concentration(i,j,k)), tsolid, species_flag==1)) then
 					uVel(i,j,k)=0.0
 					vVel(i,j,k)=0.0
 					wVel(i,j,k)=0.0
@@ -386,7 +387,7 @@ program main
 			do k=1,nk
 			do j=1,nj
 			do i=1,ni
-				if(temp(i,j,k).le.tsolid) then
+				if(temp(i,j,k).le.merge(mix(tsolid,tsolid2,concentration(i,j,k)), tsolid, species_flag==1)) then
 					uVel(i,j,k)=0.0
 					vVel(i,j,k)=0.0
 					wVel(i,j,k)=0.0

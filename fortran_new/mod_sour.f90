@@ -11,6 +11,7 @@ module source
 	use boundary
 	use cfd_utils
 	use local_enthalpy, only: delt_eff
+	use species, only: concentration, mix, tsolid2, viscos2, dens2
 	implicit none
 
 	real(wp), allocatable :: sourceinput(:,:,:)
@@ -48,14 +49,26 @@ subroutine source_momentum(idir)
 	real(wp) fracl_stag,term,tw,tlc
 	real(wp), parameter :: perm_const = 1.0e-10_wp, eps_darcy = 1.0e-3_wp
 	real(wp) darcy_c0
+	real(wp) C_local, tsolid_l, viscos_l, dens_l
 
 !-----Darcy resistance in mushy zone-----
-	darcy_c0 = 180.0_wp * viscos / perm_const
+	if (species_flag == 0) darcy_c0 = 180.0_wp * viscos / perm_const
 	do k=kstat,nkm1
-!$OMP PARALLEL PRIVATE(fracl_stag, term, tw)
+!$OMP PARALLEL PRIVATE(fracl_stag, term, tw, C_local, tsolid_l, viscos_l, dens_l, darcy_c0)
 !$OMP DO
 	do j=jstat,jend
 	do i=istatp1,iendm1
+		if (species_flag == 1) then
+			C_local  = concentration(i,j,k)
+			viscos_l = mix(viscos, viscos2, C_local)
+			tsolid_l = mix(tsolid, tsolid2, C_local)
+			dens_l   = mix(dens,   dens2,   C_local)
+			darcy_c0 = 180.0_wp * viscos_l / perm_const
+		else
+			tsolid_l = tsolid
+			dens_l   = dens
+		endif
+
 		select case(idir)
 		case(1); fracl_stag=fracl(i,j,k)*(1.0_wp-fracx(i-1))+fracl(i-1,j,k)*fracx(i-1)
 		case(2); fracl_stag=fracl(i,j,k)*(1.0_wp-fracy(j-1))+fracl(i,j-1,k)*fracy(j-1)
@@ -71,7 +84,7 @@ subroutine source_momentum(idir)
 				sp(i,j,k)=sp(i,j,k)-term*volume_w(i,j,k)
 !-----buoyancy (w only)----------------
 				tw=temp(i,j,k)*(1.0-fracz(k-1))+temp(i,j,k-1)*fracz(k-1)
-				su(i,j,k) = su(i,j,k)+dens*g*beta*volume_w(i,j,k)*(tw-tsolid)
+				su(i,j,k) = su(i,j,k)+dens_l*g*beta*volume_w(i,j,k)*(tw-tsolid_l)
 			end select
 		endif
 	enddo
@@ -95,7 +108,7 @@ subroutine source_momentum(idir)
 
 !-----assembly and under-relaxation-------------------------------------
 	do k=kstat,nkm1
-!$OMP PARALLEL PRIVATE(tlc)
+!$OMP PARALLEL PRIVATE(tlc, tsolid_l)
 !$OMP DO
 	do j=jstat,jend
 	do i=istatp1,iendm1
@@ -121,7 +134,12 @@ subroutine source_momentum(idir)
 			tlc=min(temp(i,j,k),temp(i,j,k-1))
 		end select
 !------zero velocity in solid (inlined to avoid call overhead in hot loop)-------
-		if(tlc.le.tsolid) then
+		if (species_flag == 1) then
+			tsolid_l = mix(tsolid, tsolid2, concentration(i,j,k))
+		else
+			tsolid_l = tsolid
+		endif
+		if(tlc.le.tsolid_l) then
 			su(i,j,k)=0.0_wp
 			an(i,j,k)=0.0_wp
 			as(i,j,k)=0.0_wp
@@ -140,14 +158,20 @@ end subroutine source_momentum
 !********************************************************************
 subroutine source_pp
 	integer i,j,k
+	real(wp) tsolid_l
 
 	do k=kstat,nkm1
-!$OMP PARALLEL
+!$OMP PARALLEL PRIVATE(tsolid_l)
 !$OMP DO
 	do j=jstat,jend
 	do i=istatp1,iendm1
 		ap(i,j,k)=an(i,j,k)+as(i,j,k)+ae(i,j,k)+aw(i,j,k)+at(i,j,k)+ab(i,j,k)-sp(i,j,k)
-		if(temp(i,j,k).le.tsolid)then
+		if (species_flag == 1) then
+			tsolid_l = mix(tsolid, tsolid2, concentration(i,j,k))
+		else
+			tsolid_l = tsolid
+		endif
+		if(temp(i,j,k).le.tsolid_l)then
 			su(i,j,k)=0.0_wp
 			an(i,j,k)=0.0_wp
 			as(i,j,k)=0.0_wp

@@ -22,16 +22,16 @@ gfortran -fopenmp -O3 -march=native -c \
     mod_laser.f90 \
     mod_dimen.f90 \
     mod_local_enthalpy.f90 \
+    mod_resid.f90 \
+    mod_species.f90 \
     mod_prop.f90 \
     mod_bound.f90 \
     mod_discret.f90 \
     mod_entot.f90 \
     mod_sour.f90 \
     mod_flux.f90 \
-    mod_resid.f90 \
     mod_revise.f90 \
     mod_solve.f90 \
-    mod_species.f90 \
     mod_print.f90 \
     mod_converge.f90 \
     mod_toolpath.f90 \
