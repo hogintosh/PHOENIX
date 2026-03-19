@@ -6,7 +6,9 @@ AM-CFD solves the coupled thermo-fluid equations for an incompressible Newtonian
 
 ### Continuity (Mass Conservation)
 
-$$\nabla \cdot \vec{u} = 0$$
+$$\nabla \cdot (\rho \vec{u}) = 0$$
+
+Density $\rho$ varies spatially (solid, liquid, mushy, powder have different densities), so this is not equivalent to $\nabla \cdot \vec{u} = 0$. The pressure correction equation enforces zero net mass flux through each control volume.
 
 ### Momentum (Navier-Stokes)
 
