@@ -390,18 +390,71 @@ Computes energy balance: boundary conduction losses on all 6 faces, heat accumul
 
 ## mod_defect.f90 — `defect_field`
 
+Post-simulation defect detection based on maximum temperature history. Identifies lack-of-fusion (incomplete melting) and keyhole porosity (excessive vaporization) within the powder layer.
+
+### Parameters
+
+| Parameter | Value | Description |
+|-----------|-------|-------------|
+| `k_lof` | 0.9 | Lack-of-fusion calibration factor (0–1) |
+| `k_kep` | 1.0 | Keyhole porosity scaling factor |
+
+### Arrays
+
+| Array | Shape | Description |
+|-------|-------|-------------|
+| `max_temp(ni,nj,nk)` | Full domain | Peak temperature reached during simulation (only `k_def_lo:k_def_hi` active) |
+| `defect_arr(ni,nj,nk)` | Full domain | Defect classification field |
+
+### `allocate_defect(nni, nnj, nnk)`
+Allocates arrays and determines the Z-range for defect analysis. The active range is from the top of the domain (`nkm1`) down to `z(nk) - layerheight`, covering only the powder/build layer.
+
 ### `update_max_temp()`
-Called every step: tracks peak temperature in each cell within the build layer.
+Called every time step. For each cell in the build layer (`k_def_lo:k_def_hi`), updates `max_temp(i,j,k)` if the current temperature exceeds the stored maximum. OpenMP parallelized.
 
 ### `compute_defect_determ()`
-Post-simulation classification:
+Called once after the simulation ends. Three-step process:
 
-- **Lack of fusion**: $T_{max} < T_s$ (never fully melted)
-- **Keyhole porosity**: $T_{max} > T_b$ (vaporization occurred)
-- **Sound**: $T_s \leq T_{max} \leq T_b$
+1. **Classify each cell** based on peak temperature:
+
+    | Condition | Classification | `defect_arr` value |
+    |-----------|---------------|-------------------|
+    | $T_{max} < T_s$ | Lack of fusion | $-k_{lof}$ (negative) |
+    | $T_s \leq T_{max} \leq T_b$ | Sound (defect-free) | $0$ |
+    | $T_{max} > T_b$ | Keyhole porosity | $\min\left(k_{kep} \frac{T_{max} - T_b}{T_b},\ 0.99\right)$ |
+
+2. **Build scan region polygon** from toolpath via `compute_scan_range()`
+3. **Zero defects outside scanned region** — cells that were never under the laser path are not defects
+
+### `compute_scan_range()`
+Builds a convex polygon (counter-clockwise) representing the laser-scanned region from the toolpath data:
+
+- Extracts left and right endpoints of each laser-on track
+- Constructs polygon: right boundary (bottom→top) + left boundary (top→bottom)
+- Also computes axis-aligned bounding box (`x_scan_min/max`, `y_scan_min/max`)
+
+### `point_in_scan_region(px, py)`
+Tests if point `(px, py)` is inside the convex hull polygon using the cross-product winding method. Returns `.true.` if the point is inside (all cross products ≥ 0 for CCW polygon). Used to exclude cells outside the scanned area from defect statistics.
 
 ### `write_defect_report()`
-Outputs defect fraction, VTK files for max_temp and defect classification.
+Computes volumetric defect fractions and generates output:
+
+1. **Metrics** (over scanned region only):
+    - Total reference volume $V_{total}$
+    - Lack-of-fusion volume: $V_{lof} = \sum |d_i| \cdot V_i$ where $d_i < 0$
+    - Keyhole porosity volume: $V_{kep} = \sum d_i \cdot V_i$ where $0 < d_i \leq 1$
+    - Defect fraction: $(V_{lof} + V_{kep}) / V_{total} \times 100\%$
+
+2. **Output files**:
+    - `<case>_defect_report.txt` — text summary with fractions, volumes, scan region, parameters
+    - Summary printed to `output.txt`
+    - Calls `write_defect_vtk` for VTK output
+
+### `write_defect_vtk(fieldname, field)`
+Writes a binary VTK structured-grid file for the build layer Z-range only (`k_def_lo:k_def_hi`). Used to output both `maxtemp.vtk` and `defect.vtk`. Same format as `Cust_Out` VTK files (ASCII header + big-endian float32 binary data).
+
+### `maxtemp_stochas()`
+Placeholder for future stochastic defect prediction method. Currently a no-op.
 
 ---
 
