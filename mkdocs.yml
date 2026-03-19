@@ -1,0 +1,56 @@
+site_name: AM-CFD Documentation
+site_description: Additive Manufacturing CFD Solver — Fortran + OpenMP
+repo_url: https://github.com/DrZGan/AMCFD
+repo_name: DrZGan/AMCFD
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: blue grey
+      accent: orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - tables
+  - attr_list
+  - md_in_html
+  - pymdownx.arithmatex:
+      generic: true
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Build & Run: getting-started.md
+    - Input File Reference: input-reference.md
+    - Toolpath: toolpath.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Module Reference: architecture/modules.md
+    - Solver Algorithm: architecture/solver.md
+  - Species Transport:
+    - Overview: species/overview.md
+    - Task Tracking: species/tasks.md
+  - Output & Visualization: output.md
