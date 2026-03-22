@@ -184,6 +184,7 @@ Update docs to reflect new capability.
 ---
 
 ## Notes
+- **Independent of crack risk module**: `micro_flag` and `crack_flag` are fully independent. Both compute cooling rate internally from `(temp - tnot) / delt` — no shared arrays or dependencies. Can enable either one, both, or neither.
 - This module is purely a **consumer** of thermal data — it does not feed back into the thermal or fluid solver
 - No new linear systems to solve — only algebraic operations on existing fields
 - Memory overhead: ~305 MB for 5 arrays on 400×400×50 grid

@@ -37,6 +37,8 @@ gfortran -fopenmp -O3 -march=native -c \
     mod_toolpath.f90 \
     mod_timing.f90 \
     mod_defect.f90 \
+    mod_microstructure.f90 \
+    mod_crack_risk.f90 \
     main.f90
 
 gfortran -fopenmp -O3 -march=native *.o -o cluster_main

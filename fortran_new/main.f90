@@ -32,6 +32,8 @@ program main
 	use omp_lib
 	use local_enthalpy
 	use defect_field
+	use microstructure_mod
+	use crack_risk_mod
 	use species, only: allocate_species, init_species, &
 		species_bc, solve_species, concentration, conc_old, &
 		mix, tsolid2
@@ -55,6 +57,8 @@ program main
 	call allocate_laser(ni, nj)
 	call allocate_skipped(ni, nj, nk)
 	call allocate_defect(ni, nj, nk)
+	if (micro_flag == 1) call allocate_microstructure(ni, nj, nk)
+	if (crack_flag == 1) call allocate_crack_risk(ni, nj, nk)
 	call OpenFiles
 	call initialize
 	call init_thermal_history
@@ -310,6 +314,8 @@ program main
 
 		call cpu_time(t0)
 		call update_max_temp()
+		if (micro_flag == 1) call update_microstructure(delt)
+		if (crack_flag == 1) call update_crack_risk(delt)
 		call cpu_time(t1)
 		t_defect = t_defect + (t1 - t0)
 
@@ -411,9 +417,11 @@ program main
 
 	end do time_loop
 
-	! Post-simulation defect analysis (before EndTime closes output file)
+	! Post-simulation analysis (before EndTime closes output file)
 	call compute_defect_determ()
 	call write_defect_report()
+	if (micro_flag == 1) call report_microstructure()
+	if (crack_flag == 1) call compute_crack_report()
 
 	call EndTime
 	call finalize_thermal_history
