@@ -315,8 +315,10 @@ program main
 
 		call cpu_time(t0)
 		call update_max_temp()
-		if (micro_flag == 1) call update_microstructure(delt)
-		if (crack_flag == 1) call update_crack_risk(delt)
+		if (.not. is_local) then
+			if (micro_flag == 1) call update_microstructure(delt)
+			if (crack_flag == 1) call update_crack_risk(delt)
+		endif
 		call cpu_time(t1)
 		t_defect = t_defect + (t1 - t0)
 
@@ -413,7 +415,7 @@ program main
 		if (species_flag == 1) conc_old = concentration
 		call Cust_Out
 		call write_thermal_history(timet)
-		call write_meltpool_history(timet)
+		if (.not. is_local) call write_meltpool_history(timet)
 		call cpu_time(t1)
 		t_other = t_other + (t1 - t0)
 

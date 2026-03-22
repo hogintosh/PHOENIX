@@ -210,3 +210,8 @@ All tasks implemented and validated:
 - Max strain rate: 265.8 /s ✓ (beta × cooling rate)
 - High-risk cells (CSI > 1%): 77,120 / 297,003 = 26%
 - delta_T_BTR = 100 K, beta = 5e-5
+
+## Fix Log (2026-03-22)
+1. Combined 4 separate VTK files into one `crack_risk.vtk` with multiple SCALARS
+2. Only update on global timesteps (skip local steps where tnot is stale)
+3. Added 5ms extra cooling time to ensure full solidification

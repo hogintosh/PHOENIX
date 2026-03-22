@@ -64,3 +64,7 @@ No new module needed. No new flag — always enabled (like thermal_history).
 - No new flag, no new module — minimal changes
 - Follows exact pattern of thermal_history (init/write/finalize)
 - Volume computation uses existing `fracl` and `volume` arrays
+
+## Fix Log (2026-03-22)
+1. Only log melt pool geometry on global timesteps (skip local steps where pool_size uses local bounds and produces spurious spikes)
+2. This eliminates width/depth/length spikes caused by interpolation artifacts during local solver steps

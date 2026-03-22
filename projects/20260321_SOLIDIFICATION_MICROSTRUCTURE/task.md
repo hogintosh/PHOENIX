@@ -210,3 +210,9 @@ All tasks implemented and validated:
 - PDAS: 16–104 nm (mean 41 nm) ✓ sub-micron for LPBF
 - SDAS: 58–432 nm (mean 131 nm) ✓
 - 297,003 solidified cells in scan region
+
+## Fix Log (2026-03-22)
+1. Combined 5 separate VTK files into one `microstructure.vtk` with multiple SCALARS
+2. Only update on global timesteps (skip local steps where tnot is stale)
+3. `cooling_rate` field kept (needed for SDAS computation); crack module has its own independent `cooling_rate_solid`
+4. Added 5ms extra cooling time to ensure full solidification of last track

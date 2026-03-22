@@ -162,32 +162,28 @@ subroutine compute_crack_report()
 	write(9,'(a,es12.5,a)')  '  Max strain rate at solidification:  ', strain_max, ' 1/s'
 	write(9,'(a,f10.6,a)')   '  High-risk fraction:              ', frac_highrisk * 100.0_wp, ' %'
 
-	! --- Write VTK files ---
-	call write_crack_vtk('crack_csi', crack_risk_arr)
-	call write_crack_vtk('cool_rate_solid', cool_rate_solid)
-	call write_crack_vtk('strain_rate_solid', strain_rate_solid)
-	call write_crack_vtk('btr_time', btr_time)
+	! --- Write combined VTK file ---
+	call write_crack_vtk_combined()
 
 end subroutine compute_crack_report
 
 !********************************************************************
-subroutine write_crack_vtk(fieldname, field)
-	character(len=*), intent(in) :: fieldname
-	real(wp), intent(in) :: field(:,:,:)
+subroutine write_crack_vtk_combined()
+! Write a single VTK file with all crack risk fields as separate scalars.
 	integer :: i, j, k, npts
 	integer :: gridx, gridy, gridz
 	real(kind=4) :: val4
 	integer, parameter :: lun = 92
 
-	gridx = nim1 - 2 + 1   ! 2:nim1
+	gridx = nim1 - 2 + 1
 	gridy = njm1 - 2 + 1
 	gridz = k_def_hi - k_def_lo + 1
 	npts = gridx * gridy * gridz
 
 	! ASCII header
-	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk')
+	open(unit=lun, file=trim(file_prefix)//'crack_risk.vtk')
 	write(lun,'(A)') '# vtk DataFile Version 3.0'
-	write(lun,'(A)') 'PHOENIX '//trim(fieldname)//' field'
+	write(lun,'(A)') 'PHOENIX crack risk fields'
 	write(lun,'(A)') 'BINARY'
 	write(lun,'(A)') 'DATASET STRUCTURED_GRID'
 	write(lun,'(A,I0,A,I0,A,I0)') 'DIMENSIONS ', gridx, ' ', gridy, ' ', gridz
@@ -195,7 +191,7 @@ subroutine write_crack_vtk(fieldname, field)
 	close(lun)
 
 	! Binary coordinates
-	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk', &
+	open(unit=lun, file=trim(file_prefix)//'crack_risk.vtk', &
 	     access='stream', form='unformatted', position='append', convert='big_endian')
 	do k = k_def_lo, k_def_hi
 	do j = 2, njm1
@@ -208,15 +204,35 @@ subroutine write_crack_vtk(fieldname, field)
 	enddo
 	close(lun)
 
-	! POINT_DATA + SCALARS + LOOKUP_TABLE headers (ASCII)
-	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk', position='append')
+	! POINT_DATA header
+	open(unit=lun, file=trim(file_prefix)//'crack_risk.vtk', position='append')
 	write(lun,'(A,I0)') 'POINT_DATA ', npts
-	write(lun,'(A)') 'SCALARS '//trim(fieldname)//' float 1'
+	close(lun)
+
+	! Write each scalar field
+	call write_crack_scalar(lun, 'crack_csi', crack_risk_arr)
+	call write_crack_scalar(lun, 'cooling_rate_solid', cool_rate_solid)
+	call write_crack_scalar(lun, 'strain_rate_solid', strain_rate_solid)
+	call write_crack_scalar(lun, 'btr_time', btr_time)
+
+end subroutine write_crack_vtk_combined
+
+!********************************************************************
+subroutine write_crack_scalar(lun, name, field)
+	integer, intent(in) :: lun
+	character(len=*), intent(in) :: name
+	real(wp), intent(in) :: field(:,:,:)
+	integer :: i, j, k
+	real(kind=4) :: val4
+
+	! ASCII scalar header
+	open(unit=lun, file=trim(file_prefix)//'crack_risk.vtk', position='append')
+	write(lun,'(A)') 'SCALARS '//trim(name)//' float 1'
 	write(lun,'(A)') 'LOOKUP_TABLE default'
 	close(lun)
 
-	! Binary field data
-	open(unit=lun, file=trim(file_prefix)//trim(fieldname)//'.vtk', &
+	! Binary data
+	open(unit=lun, file=trim(file_prefix)//'crack_risk.vtk', &
 	     access='stream', form='unformatted', position='append', convert='big_endian')
 	do k = k_def_lo, k_def_hi
 	do j = 2, njm1
@@ -228,6 +244,6 @@ subroutine write_crack_vtk(fieldname, field)
 	enddo
 	close(lun)
 
-end subroutine write_crack_vtk
+end subroutine write_crack_scalar
 
 end module crack_risk_mod
