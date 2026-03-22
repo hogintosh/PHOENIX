@@ -2,6 +2,42 @@
 Toolpath Generator for Rectangle Fill
 Generates laser scan toolpath filling a rectangular region in X-Y.
 Output format matches .crs files.
+
+Two usage modes (all coordinates in meters, time in seconds):
+
+  Usage 1 — Start corner (default):
+    python3 toolpath_generator_rectangle.py \
+      --start_x 0.0005 --start_y 0.0005 --start_z 0.0006975 \
+      --size_x 0.003 --size_y 0.003 ...
+
+  Usage 2 — Center of rectangle:
+    python3 toolpath_generator_rectangle.py \
+      --center_x 0.002 --center_y 0.002 --center_z 0.0006975 \
+      --size_x 0.003 --size_y 0.003 ...
+
+  If --center_x/--center_y are provided, start_x/start_y are computed as:
+    start_x = center_x - size_x / 2
+    start_y = center_y - size_y / 2
+  --center_z sets start_z directly (Z is constant throughout the toolpath).
+
+Input parameters:
+  --start_x         X coordinate of rectangle starting corner (m) [default: 0.0005]
+  --start_y         Y coordinate of rectangle starting corner (m) [default: 0.0005]
+  --start_z         Z coordinate (constant layer height) (m) [default: 0.0007]
+  --center_x        X coordinate of rectangle center (m) [overrides start_x]
+  --center_y        Y coordinate of rectangle center (m) [overrides start_y]
+  --center_z        Z coordinate (constant layer height) (m) [overrides start_z]
+  --size_x          Rectangle extent in X direction (m) [default: 0.003]
+  --size_y          Rectangle extent in Y direction (m) [default: 0.003]
+  --scan_axis       Scan along "x" or "y" [default: x]
+  --bidirectional   Alternating scan direction (default)
+  --unidirectional  Same scan direction every track
+  --hatch_spacing   Nominal hatch spacing (m), adjusted to fit rectangle exactly [default: 0.0001]
+  --scan_speed      Laser scan speed (m/s) [default: 1.2]
+  --turnaround_time Time with laser off between tracks (s) [default: 0.0005]
+  --rotation_angle  CCW rotation of rectangle about its center (degrees) [default: 0]
+  --output          Output .crs filename [default: toolpath.crs]
+  --test            Run all built-in test cases
 """
 
 import numpy as np
@@ -293,49 +329,17 @@ def plot_toolpath(
     print(f"Written {png_filename}")
 
 
-def run_tests(output_dir="test_output"):
-    """Run all test cases from Task 4."""
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Common parameters
-    common = dict(
-        start_x=0.0005, start_y=0.0005, start_z=0.0007,
-        hatch_spacing=0.0001,  # 0.1 mm
-        scan_speed=1.2,
-        turnaround_time=0.0005,
-    )
-
-    tests = [
-        ("A", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=True,  rotation_angle=0)),
-        ("B", dict(size_x=0.003, size_y=0.003, scan_axis="y", bidirectional=True,  rotation_angle=0)),
-        ("C", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=False, rotation_angle=0)),
-        ("D", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=True,  rotation_angle=45)),
-        ("E", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=True,  rotation_angle=90)),
-        ("F", dict(size_x=0.003, size_y=0.003, scan_axis="y", bidirectional=False, rotation_angle=30)),
-        ("G", dict(size_x=0.005, size_y=0.002, scan_axis="x", bidirectional=True,  rotation_angle=0)),
-        ("H", dict(size_x=0.002, size_y=0.005, scan_axis="x", bidirectional=True,  rotation_angle=0)),
-        ("I", dict(size_x=0.005, size_y=0.002, scan_axis="x", bidirectional=True,  rotation_angle=45)),
-        ("J", dict(size_x=0.005, size_y=0.002, scan_axis="y", bidirectional=True,  rotation_angle=30)),
-        ("K", dict(size_x=0.002, size_y=0.005, scan_axis="y", bidirectional=False, rotation_angle=60)),
-        ("L", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=True,  rotation_angle=0,  hatch_spacing=0.0002)),
-        ("M", dict(size_x=0.003, size_y=0.003, scan_axis="x", bidirectional=True,  rotation_angle=45, hatch_spacing=0.00005)),
-        ("N", dict(size_x=0.005, size_y=0.002, scan_axis="x", bidirectional=True,  rotation_angle=30, turnaround_time=0.002)),
-        ("O", dict(size_x=0.003, size_y=0.003, scan_axis="y", bidirectional=True,  rotation_angle=0,  hatch_spacing=0.00015, turnaround_time=0.001)),
-    ]
-
-    for name, params in tests:
-        print(f"\n=== Test {name} ===")
-        merged = {**common, **params}
-        merged["output_filename"] = os.path.join(output_dir, f"test_{name}.crs")
-        generate_toolpath(**merged)
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Rectangle toolpath generator")
-    parser.add_argument("--test", action="store_true", help="Run all test cases")
     parser.add_argument("--start_x", type=float, default=0.0005)
     parser.add_argument("--start_y", type=float, default=0.0005)
     parser.add_argument("--start_z", type=float, default=0.0007)
+    parser.add_argument("--center_x", type=float, default=None,
+                        help="X center of rectangle (overrides start_x)")
+    parser.add_argument("--center_y", type=float, default=None,
+                        help="Y center of rectangle (overrides start_y)")
+    parser.add_argument("--center_z", type=float, default=None,
+                        help="Z coordinate (overrides start_z)")
     parser.add_argument("--size_x", type=float, default=0.003)
     parser.add_argument("--size_y", type=float, default=0.003)
     parser.add_argument("--scan_axis", type=str, default="x", choices=["x", "y"])
@@ -348,15 +352,17 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default="toolpath.crs")
     args = parser.parse_args()
 
-    if args.test:
-        run_tests()
-    else:
-        bidir = not args.unidirectional
-        generate_toolpath(
-            start_x=args.start_x, start_y=args.start_y, start_z=args.start_z,
-            size_x=args.size_x, size_y=args.size_y,
-            scan_axis=args.scan_axis, bidirectional=bidir,
-            hatch_spacing=args.hatch_spacing, scan_speed=args.scan_speed,
-            turnaround_time=args.turnaround_time,
-            output_filename=args.output, rotation_angle=args.rotation_angle,
-        )
+    # Convert center coordinates to start coordinates if provided
+    sx = args.center_x - args.size_x / 2.0 if args.center_x is not None else args.start_x
+    sy = args.center_y - args.size_y / 2.0 if args.center_y is not None else args.start_y
+    sz = args.center_z if args.center_z is not None else args.start_z
+
+    bidir = not args.unidirectional
+    generate_toolpath(
+        start_x=sx, start_y=sy, start_z=sz,
+        size_x=args.size_x, size_y=args.size_y,
+        scan_axis=args.scan_axis, bidirectional=bidir,
+        hatch_spacing=args.hatch_spacing, scan_speed=args.scan_speed,
+        turnaround_time=args.turnaround_time,
+        output_filename=args.output, rotation_angle=args.rotation_angle,
+    )

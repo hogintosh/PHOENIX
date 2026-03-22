@@ -62,5 +62,4 @@ nav:
     - Solver Algorithm: architecture/solver.md
   - Species Transport:
     - Overview: species/overview.md
-    - Task Tracking: species/tasks.md
   - Output & Visualization: output.md

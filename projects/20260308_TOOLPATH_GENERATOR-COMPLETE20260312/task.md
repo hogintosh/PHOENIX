@@ -24,9 +24,15 @@ Space-delimited columns, one waypoint per line:
 
 ## Input Parameters
 
+Two ways to specify the rectangle position:
+
+1. **Start corner** (default): `--start_x`, `--start_y`, `--start_z` — bottom-left corner of the rectangle
+2. **Center**: `--center_x`, `--center_y`, `--center_z` — center of the rectangle. When provided, start coordinates are computed as `start_x = center_x - size_x/2`, `start_y = center_y - size_y/2`. `--center_z` sets the Z coordinate directly.
+
 | Parameter | Description |
 |-----------|-------------|
 | `start_x, start_y, start_z` | Starting corner coordinates (m). Z is constant throughout. |
+| `center_x, center_y, center_z` | Center coordinates (m). Overrides start_x/start_y/start_z when provided. |
 | `size_x` | Rectangle extent in X direction (m) |
 | `size_y` | Rectangle extent in Y direction (m) |
 | `scan_axis` | Scan along `"x"` or `"y"` |
