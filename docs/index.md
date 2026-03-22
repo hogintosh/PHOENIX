@@ -1,6 +1,6 @@
 # PHOENIX
 
-**PHOENIX: Process-resolved Hybrid Omniphysics Engine for Nonlinear In-situ X-evolution**
+**PHOENIX: Process-resolved Hybrid Omniphysics Engine for Non-deterministic In-situ X-evolution**
 
 PHOENIX is a hybrid physics-based and AI-accelerated solver for simulating process-to-microstructure evolution in laser-based additive manufacturing.
 
