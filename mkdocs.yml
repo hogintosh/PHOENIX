@@ -58,8 +58,12 @@ nav:
     - Toolpath: toolpath.md
   - Architecture:
     - Overview: architecture/overview.md
-    - Module Reference: architecture/modules.md
     - Solver Algorithm: architecture/solver.md
+    - Module Reference:
+      - Core Infrastructure: modules/core.md
+      - Solver Modules: modules/solver.md
+      - Physics Modules: modules/physics.md
+      - Post-Processing: modules/postprocess.md
   - Species Transport:
     - Overview: species/overview.md
   - Output & Visualization: output.md

@@ -1,6 +1,6 @@
 # PHOENIX Project
 
-PHOENIX: Process-resolved Hybrid Omniphysics Engine for Non-deterministic In-situ X-evolution — Fortran + OpenMP.
+PHOENIX: Process-resolved Hybrid Omniphysics Engine for Nonlinear In-situ X-evolution — Fortran + OpenMP.
 
 ## Principles
 

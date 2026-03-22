@@ -24,10 +24,15 @@ main.f90
 ├── OpenFiles()                          [mod_print.f90]
 ├── initialize()                         [mod_init.f90]
 ├── init_thermal_history()               [mod_print.f90]
+├── init_meltpool_history()              [mod_print.f90]
 │
 ├── [if species_flag == 1]
 │     ├── allocate_species()             [mod_species.f90]
 │     └── init_species()                 [mod_species.f90]
+├── [if micro_flag == 1]
+│     └── allocate_microstructure()      [mod_microstructure.f90]
+├── [if crack_flag == 1]
+│     └── allocate_crack_risk()          [mod_crack_risk.f90]
 │
 │ ══════════════ TIME STEPPING LOOP ══════════════
 │
@@ -112,6 +117,11 @@ main.f90
 │   │
 │   ├── update_skipped()                 [mod_local_enthalpy.f90]
 │   ├── update_max_temp()                [mod_defect.f90]
+│   ├── [if global step]
+│   │   ├── [if micro_flag == 1]
+│   │   │   └── update_microstructure()  [mod_microstructure.f90]
+│   │   └── [if crack_flag == 1]
+│   │       └── update_crack_risk()      [mod_crack_risk.f90]
 │   ├── CalTime()                        [mod_print.f90]
 │   ├── outputres()                      [mod_print.f90]
 │   │
@@ -120,16 +130,25 @@ main.f90
 │   │   └── conc_old = concentration     (inline in main.f90)
 │   ├── Cust_Out()                       [mod_print.f90]
 │   │     ├── write_vtk_vector()         [mod_print.f90]
-│   │     └── write_vtk_scalar() ×7-9    [mod_print.f90]
-│   └── write_thermal_history()          [mod_print.f90]
+│   │     └── write_vtk_scalar() ×8-10   [mod_print.f90]
+│   ├── write_thermal_history()          [mod_print.f90]
+│   └── [if global step]
+│       └── write_meltpool_history()     [mod_print.f90]
 │
 │ ══════════════ POST-SIMULATION ══════════════
 │
 ├── compute_defect_determ()              [mod_defect.f90]
 ├── write_defect_report()                [mod_defect.f90]
 │     └── write_defect_vtk() ×2         [mod_defect.f90]
+├── [if micro_flag == 1]
+│     └── report_microstructure()        [mod_microstructure.f90]
+│           └── write_micro_vtk_combined() (1 VTK, 5 scalars)
+├── [if crack_flag == 1]
+│     └── compute_crack_report()         [mod_crack_risk.f90]
+│           └── write_crack_vtk_combined() (1 VTK, 4 scalars)
 ├── EndTime()                            [mod_print.f90]
 ├── finalize_thermal_history()           [mod_print.f90]
+├── finalize_meltpool_history()          [mod_print.f90]
 ├── write_timing_report()                [mod_timing.f90]
 └── write_memory_report()                [mod_timing.f90]
 ```
