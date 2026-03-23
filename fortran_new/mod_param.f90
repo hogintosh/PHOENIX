@@ -47,11 +47,7 @@ module parameters
 	integer species_flag
 	integer micro_flag
 	integer crack_flag
-	real(wp) delta_t_btr
-	real(wp) a1_pdas, a2_sdas, n1_pdas, n2_pdas, n3_sdas
 	namelist / output_control / outputintervel, case_name, toolpath_file, species_flag, micro_flag, crack_flag
-	namelist / microstructure_params / a1_pdas, a2_sdas, n1_pdas, n2_pdas, n3_sdas
-	namelist / crack_params / delta_t_btr
 
 	contains
 
@@ -62,14 +58,6 @@ subroutine read_data
 	species_flag = 0  ! default: no species transport
 	micro_flag = 0    ! default: no microstructure prediction
 	crack_flag = 0    ! default: no crack risk prediction
-	! microstructure defaults (IN718)
-	a1_pdas = 50.0e-6_wp
-	a2_sdas = 10.0e-6_wp
-	n1_pdas = -0.5_wp
-	n2_pdas = -0.25_wp
-	n3_sdas = -0.333_wp
-	! crack risk defaults
-	delta_t_btr = 100.0_wp
 
 	open(unit=10,file='./inputfile/input_param.txt',form='formatted')
 	
@@ -110,10 +98,6 @@ subroutine read_data
 
 	READ (10, NML=output_control)
 	! read output control parameters
-
-	! Optional namelists (may not be present in input file)
-	READ (10, NML=microstructure_params, iostat=i)
-	READ (10, NML=crack_params, iostat=i)
 
 	close(10)    ! close file 10
 

@@ -28,7 +28,8 @@ module crack_risk_mod
 
 	implicit none
 
-	! --- Input parameter read from mod_param.f90 (delta_t_btr) ---
+	! --- BTR width below T_solidus (K). Material has near-zero ductility in this range. ---
+	real(wp), parameter :: delta_t_btr = 100.0_wp  ! default for IN718
 
 	! --- Arrays (full X-Y, limited Z range) ---
 	real(wp), allocatable :: cool_rate_solid(:,:,:)    ! cooling rate at solidification (K/s)

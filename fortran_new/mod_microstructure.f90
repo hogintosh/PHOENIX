@@ -31,7 +31,12 @@ module microstructure_mod
 
 	implicit none
 
-	! --- Model parameters read from mod_param.f90 (a1_pdas, a2_sdas, n1_pdas, n2_pdas, n3_sdas) ---
+	! --- Model parameters (IN718 defaults, Kurz-Fisher / Kattamis-Flemings) ---
+	real(wp), parameter :: a1_pdas = 50.0e-6_wp   ! PDAS prefactor (m)
+	real(wp), parameter :: a2_sdas = 10.0e-6_wp   ! SDAS prefactor (m)
+	real(wp), parameter :: n1_pdas = -0.5_wp      ! PDAS exponent for G
+	real(wp), parameter :: n2_pdas = -0.25_wp     ! PDAS exponent for R
+	real(wp), parameter :: n3_sdas = -0.333_wp    ! SDAS exponent for cooling rate
 
 	! --- Arrays (full X-Y, limited Z range active) ---
 	real(wp), allocatable :: cool_rate_micro(:,:,:)   ! cooling rate at solidification (K/s)
