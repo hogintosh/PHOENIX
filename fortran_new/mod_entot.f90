@@ -56,7 +56,7 @@ subroutine enthalpy_to_temp(ilo, ihi, jlo, jhi, klo, khi)
 !$OMP END PARALLEL
 	enddo
 	return
-!********************************************************************
 
 end subroutine enthalpy_to_temp
+
 end module entotemp

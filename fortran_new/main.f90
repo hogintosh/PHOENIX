@@ -32,6 +32,7 @@ program main
 	use omp_lib
 	use defect_field
 	use adaptive_mesh_mod
+	use prediction
 	use species, only: allocate_species, init_species, &
 		species_bc, solve_species, concentration, conc_old, &
 		mix, tsolid2
@@ -107,6 +108,21 @@ program main
 		call pool_size(ilo, ihi, jlo, jhi, klo, khi)
 		call cpu_time(t1)
 		t_dimen = t_dimen + (t1 - t0)
+
+!-----integer-cell field prediction for heating steps (no interpolation)-----
+!     Extend shift region beyond melt pool in scan direction to cover where laser is moving
+		if (predict_flag == 1 .and. toolmatrix(PathNum,5) .ge. laser_on_threshold .and. tpeak .gt. tsolid) then
+			i = max(nint(abs(scanvelx) * delt / amr_dx_fine), 3)
+			j = max(nint(abs(scanvely) * delt / amr_dx_fine), 3)
+			call predict_shift_integer(scanvelx, scanvely, delt, &
+				max(istat-i, 2), min(iend+i, nim1), &
+				max(jstat-j, 2), min(jend+j, njm1), &
+				kstat, nkm1)
+			call enthalpy_to_temp( &
+				max(istat-i, 2), min(iend+i, nim1), &
+				max(jstat-j, 2), min(jend+j, njm1), &
+				kstat, nkm1)
+		endif
 
 !-----iteration loop within each time step----------------
 		iter_loop: do while (niter.lt.maxit)

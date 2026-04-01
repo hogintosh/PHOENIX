@@ -28,6 +28,7 @@ gfortran -fopenmp -O3 -march=native -c \
     mod_bound.f90 \
     mod_discret.f90 \
     mod_entot.f90 \
+    mod_predict.f90 \
     mod_sour.f90 \
     mod_flux.f90 \
     mod_revise.f90 \

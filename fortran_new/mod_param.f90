@@ -51,7 +51,10 @@ module parameters
 	real(wp) :: amr_dx_fine = 10.0e-6_wp
 	integer  :: remesh_interval = 20
 
-	namelist / output_control / outputintervel, case_name, toolpath_file, species_flag
+	! Enthalpy prediction flag
+	integer :: predict_flag = 0   ! 0=off, 1=integer-cell shift prediction during heating
+
+	namelist / output_control / outputintervel, case_name, toolpath_file, species_flag, predict_flag
 	namelist / adaptive_mesh / adaptive_flag, amr_local_half_x, amr_local_half_y, amr_dx_fine, remesh_interval
 
 	contains
