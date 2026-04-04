@@ -6,7 +6,8 @@ module mech_material
 ! Parameters identical to fortran-ebe-lpbf.
 !
 	use precision
-	use parameters, only: tsolid, wp
+	use parameters, only: tsolid, wp, layerheight
+	use geometry, only: z, nk
 	use constant, only: powder_threshold
 	implicit none
 
@@ -16,10 +17,11 @@ module mech_material
 	integer, parameter :: MECH_SOLID  = 2
 
 	! Mechanical material parameters (identical to fortran-ebe-lpbf)
-	real(wp), parameter :: E_solid   = 70.0e9_wp      ! Young's modulus, solid (Pa)
+	real(wp), parameter :: E_solid   = 70.0e9_wp      ! Young's modulus, solid/substrate (Pa)
 	real(wp), parameter :: E_soft    = 0.7e9_wp        ! Young's modulus, powder/liquid (Pa)
 	real(wp), parameter :: nu_mech   = 0.3_wp          ! Poisson's ratio
-	real(wp), parameter :: sig_yield = 250.0e6_wp      ! J2 yield stress (Pa)
+	real(wp), parameter :: sig_yield_0 = 250.0e6_wp    ! J2 yield stress at reference temp (Pa)
+	real(wp), parameter :: T_ref_yield = 293.0_wp       ! Reference temperature for yield (K)
 	real(wp), parameter :: alpha_V   = 1.0e-5_wp       ! Volumetric thermal expansion (1/K)
 
 	! Solver parameters
@@ -31,33 +33,60 @@ module mech_material
 	contains
 
 !********************************************************************
-subroutine update_mech_phase(mech_phase, temp_arr, solidfield_arr, nnx, nny, nnz)
+subroutine update_mech_phase(mech_phase, temp_arr, solidfield_arr, nnx, nny, nnz, fem_z_arr)
 ! Update mechanical phase from PHOENIX temperature and solidfield.
-! MECH_POWDER: never melted and below solidus
 ! MECH_LIQUID: currently above solidus (in melt pool)
-! MECH_SOLID:  was once melted and now below solidus
+! MECH_SOLID:  substrate OR solidified (was once melted)
+! MECH_POWDER: in powder layer (z > z_top - layerheight) and never melted
 	integer,  intent(out) :: mech_phase(nnx, nny, nnz)
 	real(wp), intent(in)  :: temp_arr(nnx, nny, nnz)
 	real(wp), intent(in)  :: solidfield_arr(nnx, nny, nnz)
+	real(wp), intent(in)  :: fem_z_arr(nnz)
 	integer, intent(in)   :: nnx, nny, nnz
 	integer :: i, j, k
+	real(wp) :: z_top, z_powder_min
+
+	z_top = z(nk)              ! top of domain
+	z_powder_min = z_top - layerheight  ! powder layer starts here
 
 	!$OMP PARALLEL DO PRIVATE(i,j,k)
 	do k = 1, nnz
 	do j = 1, nny
 	do i = 1, nnx
 		if (temp_arr(i,j,k) >= tsolid) then
+			! Currently molten
 			mech_phase(i,j,k) = MECH_LIQUID
 		else if (solidfield_arr(i,j,k) > powder_threshold) then
+			! Was melted and now solidified
 			mech_phase(i,j,k) = MECH_SOLID
-		else
+		else if (fem_z_arr(k) >= z_powder_min) then
+			! In powder layer height range and never melted → powder
 			mech_phase(i,j,k) = MECH_POWDER
+		else
+			! Below powder layer, never melted → substrate (treated as solid)
+			mech_phase(i,j,k) = MECH_SOLID
 		endif
 	enddo
 	enddo
 	enddo
 	!$OMP END PARALLEL DO
 end subroutine update_mech_phase
+
+!********************************************************************
+function get_sig_yield(T) result(sy)
+! Temperature-dependent yield strength.
+! Linear decrease from sig_yield_0 at T_ref to 0 at tsolid.
+	real(wp), intent(in) :: T
+	real(wp) :: sy
+
+	if (T <= T_ref_yield) then
+		sy = sig_yield_0
+	else if (T >= tsolid) then
+		sy = 0.0_wp
+	else
+		sy = sig_yield_0 * (tsolid - T) / (tsolid - T_ref_yield)
+	endif
+end function get_sig_yield
 
 !********************************************************************
 subroutine build_C_matrix(E_val, nu_val, C)
@@ -79,12 +108,15 @@ subroutine build_C_matrix(E_val, nu_val, C)
 end subroutine build_C_matrix
 
 !********************************************************************
-subroutine j2_return_map(s_trial, s_mapped, f_yield_out)
-! J2 von Mises radial return mapping.
+subroutine j2_return_map(s_trial, s_mapped, f_yield_out, T_gp)
+! J2 von Mises radial return mapping with temperature-dependent yield.
 	real(wp), intent(in)  :: s_trial(6)
 	real(wp), intent(out) :: s_mapped(6)
 	real(wp), intent(out) :: f_yield_out
-	real(wp) :: s_mean, s_dev(6), s_norm, f_yield
+	real(wp), intent(in)  :: T_gp    ! temperature at this Gauss point
+	real(wp) :: s_mean, s_dev(6), s_norm, f_yield, sy
+
+	sy = get_sig_yield(T_gp)
 
 	s_mean = (s_trial(1) + s_trial(2) + s_trial(3)) / 3.0_wp
 	s_dev(1) = s_trial(1) - s_mean
@@ -97,7 +129,7 @@ subroutine j2_return_map(s_trial, s_mapped, f_yield_out)
 	s_norm = sqrt(1.5_wp * (s_dev(1)**2 + s_dev(2)**2 + s_dev(3)**2 &
 	         + 2.0_wp * (s_dev(4)**2 + s_dev(5)**2 + s_dev(6)**2)))
 
-	f_yield = s_norm - sig_yield
+	f_yield = s_norm - sy
 	f_yield_out = max(f_yield, 0.0_wp)
 
 	if (f_yield > 0.0_wp .and. s_norm > 1.0e-30_wp) then

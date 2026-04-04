@@ -7,7 +7,7 @@ module mech_io
 	use precision
 	use geometry, only: x, y, z, nim1, njm1, nkm1
 	use parameters, only: wp, file_prefix, case_name, result_dir
-	use mech_material, only: sig_yield
+	use mech_material, only: sig_yield_0
 	use mechanical_solver, only: fem_x, fem_y, fem_z
 	implicit none
 
@@ -218,18 +218,37 @@ subroutine write_mech_history(t, T_fem, ux, uy, uz, sxx, syy, Nnx, Nny, Nnz)
 	open(unit=lun, file=trim(file_prefix)//'mech_history.txt', status='old', position='append')
 	write(lun,'(es12.5)', advance='no') t
 
+	! Write all T values first, then all ux, uy, uz, sxx, syy
+	! This makes Python parsing simple: data[:,1:11]=T, data[:,11:21]=ux, etc.
 	do p = 1, n_thist
 		xp = thist_px(p); yp = thist_py(p)
-		! Find bracketing FEM node indices (FEM node i corresponds to x(i+1))
 		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
-		! Interpolate and write: T, ux, uy, uz, sxx, syy
-		write(lun,'(6(2x,es12.5))', advance='no') &
-			interp2d(T_fem, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz), &
-			interp2d(ux,    i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz), &
-			interp2d(uy,    i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz), &
-			interp2d(uz,    i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz), &
-			interp2d(sxx,   i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz), &
-			interp2d(syy,   i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(T_fem, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+	enddo
+	do p = 1, n_thist
+		xp = thist_px(p); yp = thist_py(p)
+		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(ux, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+	enddo
+	do p = 1, n_thist
+		xp = thist_px(p); yp = thist_py(p)
+		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(uy, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+	enddo
+	do p = 1, n_thist
+		xp = thist_px(p); yp = thist_py(p)
+		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(uz, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+	enddo
+	do p = 1, n_thist
+		xp = thist_px(p); yp = thist_py(p)
+		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(sxx, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
+	enddo
+	do p = 1, n_thist
+		xp = thist_px(p); yp = thist_py(p)
+		call find_fem_bracket(xp, yp, Nnx, Nny, i1, i2, j1, j2, wx, wy)
+		write(lun,'(2x,es12.5)', advance='no') interp2d(syy, i1,i2,j1,j2,wx,wy,Nnx,Nny,Nnz)
 	enddo
 	write(lun,*)
 	close(lun)
@@ -342,5 +361,84 @@ subroutine finalize_mech_history()
 	call execute_command_line('cd '//trim(result_dir)// &
 		' && python3 '//trim(adjustl(case_name))//'_plot_mech_history.py', wait=.true.)
 end subroutine finalize_mech_history
+
+!********************************************************************
+subroutine finalize_mechanical_io()
+! Write Python deformation animation script and execute it.
+! Reads all _mech_NNNNN.vtk files, warps by displacement, colors by phase.
+	integer, parameter :: lun = 94
+	character(len=256) :: script_name
+
+	script_name = trim(file_prefix)//'plot_deformation.py'
+
+	open(unit=lun, file=trim(script_name), status='replace')
+	write(lun,'(a)') '"""'
+	write(lun,'(a)') 'Generate deformation animation GIF from mechanical VTK files.'
+	write(lun,'(a)') 'Blue=POWDER, White=LIQUID, Red=SOLID, 10x deformation magnification.'
+	write(lun,'(a)') '"""'
+	write(lun,'(a)') 'import glob, os, sys'
+	write(lun,'(a)') 'import numpy as np'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'try:'
+	write(lun,'(a)') '    import pyvista as pv'
+	write(lun,'(a)') '    from PIL import Image'
+	write(lun,'(a)') 'except ImportError:'
+	write(lun,'(a)') '    print("pyvista or PIL not available, skipping deformation animation")'
+	write(lun,'(a)') '    sys.exit(0)'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'pv.OFF_SCREEN = True'
+	write(lun,'(a)') 'try:'
+	write(lun,'(a)') '    pv.start_xvfb()'
+	write(lun,'(a)') 'except Exception:'
+	write(lun,'(a)') '    pass'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'case = "'//trim(adjustl(case_name))//'"'
+	write(lun,'(a)') 'vtk_files = sorted(glob.glob(case + "_mech_*.vtk"))'
+	write(lun,'(a)') 'if len(vtk_files) == 0:'
+	write(lun,'(a)') '    print("No mechanical VTK files found"); sys.exit(0)'
+	write(lun,'(a)') 'print(f"Found {len(vtk_files)} VTK files")'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'mag = 10.0  # deformation magnification'
+	write(lun,'(a)') 'from matplotlib.colors import LinearSegmentedColormap'
+	write(lun,'(a)') 'phase_cmap = LinearSegmentedColormap.from_list('
+	write(lun,'(a)') '    "phase", [(0.2,0.4,1.0), (1,1,1), (1,0.2,0.2)], N=256)'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'frames = []'
+	write(lun,'(a)') 'for i, fpath in enumerate(vtk_files):'
+	write(lun,'(a)') '    print(f"  Frame {i+1}/{len(vtk_files)}: {os.path.basename(fpath)}")'
+	write(lun,'(a)') '    mesh = pv.read(fpath)'
+	write(lun,'(a)') '    pts = mesh.points.copy()'
+	write(lun,'(a)') '    if "ux" in mesh.point_data and "uy" in mesh.point_data and "uz" in mesh.point_data:'
+	write(lun,'(a)') '        disp = np.column_stack([mesh.point_data["ux"],'
+	write(lun,'(a)') '                                mesh.point_data["uy"],'
+	write(lun,'(a)') '                                mesh.point_data["uz"]])'
+	write(lun,'(a)') '        mesh.points = pts + mag * disp'
+	write(lun,'(a)') '    phase = mesh.point_data.get("phase", np.zeros(mesh.n_points))'
+	write(lun,'(a)') '    phase = phase.astype(float)'
+	write(lun,'(a)') '    pl = pv.Plotter(off_screen=True, window_size=[1200, 500])'
+	write(lun,'(a)') '    pl.add_mesh(mesh, scalars=phase, clim=[0,2], cmap=phase_cmap,'
+	write(lun,'(a)') '                show_edges=False,'
+	write(lun,'(a)') '                scalar_bar_args={"title":"Phase","n_labels":3,'
+	write(lun,'(a)') '                                 "label_font_size":14,"title_font_size":16})'
+	write(lun,'(a)') '    pl.camera_position = "xy"'
+	write(lun,'(a)') '    pl.camera.zoom(1.3)'
+	write(lun,'(a)') '    step = os.path.basename(fpath).replace(case+"_mech_","").replace(".vtk","")'
+	write(lun,'(a)') '    pl.add_text(f"Step {step} (x{int(mag)} deformation)",'
+	write(lun,'(a)') '                position="upper_left", font_size=12)'
+	write(lun,'(a)') '    pl.show(auto_close=False)'
+	write(lun,'(a)') '    img = pl.screenshot(return_img=True)'
+	write(lun,'(a)') '    pl.close()'
+	write(lun,'(a)') '    frames.append(Image.fromarray(img))'
+	write(lun,'(a)') ''
+	write(lun,'(a)') 'if frames:'
+	write(lun,'(a)') '    gif = case + "_deformation.gif"'
+	write(lun,'(a)') '    frames[0].save(gif, save_all=True, append_images=frames[1:],'
+	write(lun,'(a)') '                   duration=100, loop=0)'
+	write(lun,'(a)') '    print(f"Saved {gif} ({os.path.getsize(gif)/1024/1024:.1f} MB)")'
+	close(lun)
+
+	call execute_command_line('cd '//trim(result_dir)// &
+		' && python3 '//trim(adjustl(case_name))//'_plot_deformation.py', wait=.true.)
+end subroutine finalize_mechanical_io
 
 end module mech_io

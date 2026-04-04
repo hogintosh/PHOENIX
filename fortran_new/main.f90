@@ -418,6 +418,7 @@ program main
 		call write_mech_timing_report(file_prefix)
 		call write_mech_memory_report(file_prefix, Nx, Ny, Nz, Nnx, Nny, Nnz)
 		call finalize_mech_history()
+		call finalize_mechanical_io()
 		call cleanup_mechanical()
 	endif
 

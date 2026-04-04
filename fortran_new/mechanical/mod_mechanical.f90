@@ -420,16 +420,17 @@ subroutine compute_dT_gp(T_new, dT_gp_arr)
 end subroutine compute_dT_gp
 
 !********************************************************************
-subroutine compute_residual(ux, uy, uz, dT_gp_arr, phase, Rx, Ry, Rz)
+subroutine compute_residual(ux, uy, uz, dT_gp_arr, T_fem, phase, Rx, Ry, Rz)
 	real(wp), intent(in)  :: ux(Nnx,Nny,Nnz), uy(Nnx,Nny,Nnz), uz(Nnx,Nny,Nnz)
 	real(wp), intent(in)  :: dT_gp_arr(8, Nx, Ny, Nz)
+	real(wp), intent(in)  :: T_fem(Nnx, Nny, Nnz)
 	integer,  intent(in)  :: phase(Nnx,Nny,Nnz)
 	real(wp), intent(out) :: Rx(Nnx,Nny,Nnz), Ry(Nnx,Nny,Nnz), Rz(Nnx,Nny,Nnz)
 
 	real(wp) :: u_e(24), R_e(24), eps_curr(6), eps_inc(6), eps_th(6)
 	real(wp) :: s_trial(6), sigma(6), BtSig(24), C_loc(6,6), B_gp(6,24)
-	real(wp) :: av, dT_g, f_dum, dxe, dye, dze, det_J
-	integer  :: ie, je, ke, di, dj, dk, ln, dof, g, p, q
+	real(wp) :: av, dT_g, f_dum, dxe, dye, dze, det_J, T_gp_val
+	integer  :: ie, je, ke, di, dj, dk, ln, dof, g, p, q, a
 	integer  :: color, ic, jc, kc, ph_g
 
 	Rx = 0.0_wp; Ry = 0.0_wp; Rz = 0.0_wp
@@ -498,7 +499,13 @@ subroutine compute_residual(ux, uy, uz, dT_gp_arr, phase, Rx, Ry, Rz)
 					enddo
 				enddo
 
-				call j2_return_map(s_trial, sigma, f_dum)
+				! Temperature at GP for yield strength
+				T_gp_val = 0.0_wp
+				do a = 1, 8
+					di = mod(a-1,2); dj = mod((a-1)/2,2); dk = (a-1)/4
+					T_gp_val = T_gp_val + N_gp(a, g) * T_fem(ie+di, je+dj, ke+dk)
+				enddo
+				call j2_return_map(s_trial, sigma, f_dum, T_gp_val)
 
 				! R_e += B^T * sigma * detJ
 				do p = 1, 24
@@ -695,15 +702,16 @@ subroutine solve_mech_cg(ux, uy, uz, fx, fy, fz, phase, cg_iters_out)
 end subroutine solve_mech_cg
 
 !********************************************************************
-subroutine update_gp_state(ux, uy, uz, dT_gp_arr, phase)
+subroutine update_gp_state(ux, uy, uz, dT_gp_arr, T_fem, phase)
 	real(wp), intent(in) :: ux(Nnx,Nny,Nnz), uy(Nnx,Nny,Nnz), uz(Nnx,Nny,Nnz)
 	real(wp), intent(in) :: dT_gp_arr(8, Nx, Ny, Nz)
+	real(wp), intent(in) :: T_fem(Nnx, Nny, Nnz)
 	integer,  intent(in) :: phase(Nnx,Nny,Nnz)
 
 	real(wp) :: u_e(24), eps_curr(6), eps_inc(6), eps_th(6)
 	real(wp) :: s_trial(6), sigma(6), C_loc(6,6), B_gp(6,24)
-	real(wp) :: av, dT_g, f_yield_g, dxe, dye, dze
-	integer  :: ie, je, ke, di, dj, dk, ln, dof, g, p, q, ph_g
+	real(wp) :: av, dT_g, f_yield_g, dxe, dye, dze, T_gp_val
+	integer  :: ie, je, ke, di, dj, dk, ln, dof, g, p, q, ph_g, a
 
 	f_plus = 0.0_wp
 
@@ -760,7 +768,13 @@ subroutine update_gp_state(ux, uy, uz, dT_gp_arr, phase)
 				enddo
 			enddo
 
-			call j2_return_map(s_trial, sigma, f_yield_g)
+			! Temperature at GP
+		T_gp_val = 0.0_wp
+		do a = 1, 8
+			di = mod(a-1,2); dj = mod((a-1)/2,2); dk = (a-1)/4
+			T_gp_val = T_gp_val + N_gp(a, g) * T_fem(ie+di, je+dj, ke+dk)
+		enddo
+		call j2_return_map(s_trial, sigma, f_yield_g, T_gp_val)
 			sig_gp(:, g, ie, je, ke) = sigma
 			eps_gp(:, g, ie, je, ke) = eps_curr
 		enddo
@@ -770,18 +784,19 @@ subroutine update_gp_state(ux, uy, uz, dT_gp_arr, phase)
 	!$OMP END PARALLEL DO
 
 	! Scatter f_plus using 8-color
-	call scatter_fplus_to_nodes()
+	call scatter_fplus_to_nodes(T_fem)
 end subroutine update_gp_state
 
 !********************************************************************
-subroutine scatter_fplus_to_nodes()
+subroutine scatter_fplus_to_nodes(T_fem)
+	real(wp), intent(in) :: T_fem(Nnx, Nny, Nnz)
 	integer :: ie, je, ke, g, di, dj, dk, color, ic, jc, kc
-	real(wp) :: sm, sd(6), sn, fy
+	real(wp) :: sm, sd(6), sn, fy, sy
 
 	f_plus = 0.0_wp
 	do color = 0, 7
 		ic = mod(color, 2); jc = mod(color/2, 2); kc = mod(color/4, 2)
-		!$OMP PARALLEL DO PRIVATE(ie,je,ke,g,di,dj,dk,sm,sd,sn,fy) COLLAPSE(3)
+		!$OMP PARALLEL DO PRIVATE(ie,je,ke,g,di,dj,dk,sm,sd,sn,fy,sy) COLLAPSE(3)
 		do ke = 1+kc, Nz, 2
 		do je = 1+jc, Ny, 2
 		do ie = 1+ic, Nx, 2
@@ -791,7 +806,8 @@ subroutine scatter_fplus_to_nodes()
 				sd(1)=sig_gp(1,g,ie,je,ke)-sm; sd(2)=sig_gp(2,g,ie,je,ke)-sm; sd(3)=sig_gp(3,g,ie,je,ke)-sm
 				sd(4)=sig_gp(4,g,ie,je,ke); sd(5)=sig_gp(5,g,ie,je,ke); sd(6)=sig_gp(6,g,ie,je,ke)
 				sn = sqrt(1.5_wp*(sd(1)**2+sd(2)**2+sd(3)**2+2.0_wp*(sd(4)**2+sd(5)**2+sd(6)**2)))
-				fy = max(sn - sig_yield, 0.0_wp)
+				sy = get_sig_yield(T_fem(ie+di, je+dj, ke+dk))
+				fy = max(sn - sy, 0.0_wp)
 				f_plus(ie+di,je+dj,ke+dk) = max(f_plus(ie+di,je+dj,ke+dk), fy)
 			enddo
 		enddo
@@ -824,7 +840,7 @@ subroutine solve_mechanical(T_phoenix, sf_phoenix, res_out, newton_iters_out, cg
 	! Extract fields from PHOENIX grid to FEM grid
 	call extract_temp_to_fem(T_phoenix, T_fem)
 	call extract_solidfield_to_fem(sf_phoenix, sf_fem)
-	call update_mech_phase(mech_phase, T_fem, sf_fem, Nnx, Nny, Nnz)
+	call update_mech_phase(mech_phase, T_fem, sf_fem, Nnx, Nny, Nnz, fem_z)
 	call compute_elem_phases(mech_phase)
 	call compute_dT_gp(T_fem, dT_gp_arr)
 
@@ -832,7 +848,7 @@ subroutine solve_mechanical(T_phoenix, sf_phoenix, res_out, newton_iters_out, cg
 	cg_iters_out = 0
 	R_norm0 = 0.0_wp
 	do newton_iter = 1, newton_maxiter
-		call compute_residual(ux_mech, uy_mech, uz_mech, dT_gp_arr, mech_phase, Rx, Ry, Rz)
+		call compute_residual(ux_mech, uy_mech, uz_mech, dT_gp_arr, T_fem, mech_phase, Rx, Ry, Rz)
 
 		R_norm = sqrt(sum(Rx**2) + sum(Ry**2) + sum(Rz**2))
 		if (newton_iter == 1) R_norm0 = R_norm
@@ -849,7 +865,7 @@ subroutine solve_mechanical(T_phoenix, sf_phoenix, res_out, newton_iters_out, cg
 	res_out = R_norm / max(R_norm0, 1.0e-30_wp)
 
 	! Update GP state
-	call update_gp_state(ux_mech, uy_mech, uz_mech, dT_gp_arr, mech_phase)
+	call update_gp_state(ux_mech, uy_mech, uz_mech, dT_gp_arr, T_fem, mech_phase)
 
 	! Save FEM temperature for VTK/history output
 	T_fem_last = T_fem
