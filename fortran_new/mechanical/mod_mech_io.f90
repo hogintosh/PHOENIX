@@ -5,7 +5,7 @@ module mech_io
 ! VTK output, timing report, and history for mechanical solver.
 !
 	use precision
-	use geometry, only: x, y, z, nim1, njm1, nkm1
+	use geometry, only: x, y, z, ni, nj, nk, nim1, njm1, nkm1
 	use parameters, only: wp, file_prefix, case_name, result_dir
 	use mech_material, only: sig_yield_0
 	use mechanical_solver, only: fem_x, fem_y, fem_z
@@ -21,6 +21,96 @@ module mech_io
 	logical, save :: mech_hist_init = .false.
 
 	contains
+
+!********************************************************************
+subroutine write_mech_input(step_idx, time, temp, solidfield_arr)
+! Write binary temperature/solidfield file for parallel mechanical solver.
+! Also writes x, y arrays for AMR grid sync.
+	integer,  intent(in) :: step_idx
+	real(wp), intent(in) :: time
+	real(wp), intent(in) :: temp(:,:,:), solidfield_arr(:,:,:)
+	integer, parameter :: lun = 95
+	character(len=512) :: binfile, readyfile
+	character(len=10) :: cstep
+
+	write(cstep, '(I5.5)') step_idx
+	binfile   = trim(file_prefix)//'mech_input_'//trim(adjustl(cstep))//'.bin'
+	readyfile = trim(file_prefix)//'mech_input_'//trim(adjustl(cstep))//'.ready'
+
+	! Write binary data
+	open(unit=lun, file=trim(binfile), form='unformatted', access='stream', status='replace')
+	write(lun) step_idx, time
+	write(lun) ni, nj, nk
+	write(lun) temp(1:ni, 1:nj, 1:nk)
+	write(lun) solidfield_arr(1:ni, 1:nj, 1:nk)
+	write(lun) x(1:ni)
+	write(lun) y(1:nj)
+	close(lun)
+
+	! Write sentinel (atomic signal that data is ready)
+	open(unit=lun, file=trim(readyfile), status='replace')
+	close(lun)
+end subroutine write_mech_input
+
+!********************************************************************
+subroutine read_mech_input(step_idx_expect, step_out, time_out, &
+                           temp_buf, sf_buf, x_buf, y_buf, found)
+! Read binary temperature/solidfield file written by thermal solver.
+! Polls for the .ready sentinel for the expected step.
+	integer,  intent(in)  :: step_idx_expect
+	integer,  intent(out) :: step_out
+	real(wp), intent(out) :: time_out
+	real(wp), intent(out) :: temp_buf(:,:,:), sf_buf(:,:,:)
+	real(wp), intent(out) :: x_buf(:), y_buf(:)
+	logical,  intent(out) :: found
+
+	integer, parameter :: lun = 95
+	character(len=512) :: binfile, readyfile
+	character(len=10) :: cstep
+	integer :: ni_r, nj_r, nk_r
+	logical :: exists
+
+	write(cstep, '(I5.5)') step_idx_expect
+	readyfile = trim(file_prefix)//'mech_input_'//trim(adjustl(cstep))//'.ready'
+	binfile   = trim(file_prefix)//'mech_input_'//trim(adjustl(cstep))//'.bin'
+
+	inquire(file=trim(readyfile), exist=exists)
+	if (.not. exists) then
+		found = .false.
+		return
+	endif
+
+	! Read binary data
+	open(unit=lun, file=trim(binfile), form='unformatted', access='stream', status='old')
+	read(lun) step_out, time_out
+	read(lun) ni_r, nj_r, nk_r
+	read(lun) temp_buf(1:ni_r, 1:nj_r, 1:nk_r)
+	read(lun) sf_buf(1:ni_r, 1:nj_r, 1:nk_r)
+	read(lun) x_buf(1:ni_r)
+	read(lun) y_buf(1:nj_r)
+	close(lun)
+
+	! Clean up files
+	open(unit=lun, file=trim(readyfile), status='old'); close(lun, status='delete')
+	open(unit=lun, file=trim(binfile),   status='old'); close(lun, status='delete')
+
+	found = .true.
+end subroutine read_mech_input
+
+!********************************************************************
+subroutine write_mech_done()
+! Write sentinel file to signal thermal loop is complete.
+	integer, parameter :: lun = 95
+	open(unit=lun, file=trim(file_prefix)//'mech_DONE', status='replace')
+	close(lun)
+end subroutine write_mech_done
+
+!********************************************************************
+function check_mech_done() result(done)
+! Check if thermal solver has signaled completion.
+	logical :: done
+	inquire(file=trim(file_prefix)//'mech_DONE', exist=done)
+end function check_mech_done
 
 !********************************************************************
 subroutine write_mech_vtk(step_idx, T_fem, ux, uy, uz, phase, sxx, syy, szz, vonmises, fplus, &

@@ -59,6 +59,8 @@ module parameters
 	integer :: mech_interval = 10         ! solve mechanical every N thermal steps
 	integer :: mech_output_interval = 5   ! output mech VTK every N mechanical solves
 	integer :: mech_mesh_ratio = 2        ! mechanical grid coarsening ratio vs thermal (1=same, 2=half cells, etc.)
+	integer :: n_thermal_threads = 0      ! 0=use all OMP threads (set from env PHOENIX_MECH_THREADS)
+	integer :: n_mech_threads = 0         ! 0=serial mechanical (in-loop), >0=parallel
 
 	namelist / output_control / outputintervel, case_name, toolpath_file, species_flag, predict_flag
 	namelist / adaptive_mesh / adaptive_flag, amr_local_half_x, amr_local_half_y, amr_dx_fine, remesh_interval
@@ -121,6 +123,16 @@ subroutine read_data
 	result_dir = './result/' // trim(adjustl(case_name)) // '/'
 	file_prefix = trim(result_dir) // trim(adjustl(case_name)) // '_'
 	call execute_command_line('mkdir -p ' // trim(result_dir))
+
+	! Read thread allocation from environment (set by run.sh)
+	block
+		character(len=32) :: envval
+		integer :: ios
+		call get_environment_variable('PHOENIX_THERMAL_THREADS', envval, status=ios)
+		if (ios == 0) read(envval, *, iostat=ios) n_thermal_threads
+		call get_environment_variable('PHOENIX_MECH_THREADS', envval, status=ios)
+		if (ios == 0) read(envval, *, iostat=ios) n_mech_threads
+	end block
 
 	return
 end subroutine read_data

@@ -51,8 +51,29 @@ program main
 	real(wp) mech_res
 	integer  mech_newton_iters, mech_cg_iters, n_yield
 	real(wp) t_mech_cpu0, t_mech_cpu1
+	logical  mech_parallel  ! .true. if mechanical runs as separate process
+	character(len=32) :: run_mode  ! 'thermal', 'mechanical', or '' (default=all)
 
 	call read_data
+
+	! Check run mode from environment (set by run.sh for parallel)
+	run_mode = ''
+	block
+		character(len=32) :: envval
+		integer :: ios
+		call get_environment_variable('PHOENIX_RUN_MODE', envval, status=ios)
+		if (ios == 0) run_mode = trim(adjustl(envval))
+	end block
+
+	! Mechanical-only process: skip thermal init, go straight to mechanical loop
+	if (run_mode == 'mechanical') then
+		call generate_grid
+		call init_mechanical()
+		call init_mech_history(Nnx, Nny, Nnz)
+		call run_mechanical_loop()
+		stop
+	endif
+
 	call read_toolpath
 	call generate_grid          ! sets ni,nj,nk and allocates geometry
 	call allocate_fields(ni, nj, nk)
@@ -64,7 +85,9 @@ program main
 	call initialize
 	if (adaptive_flag == 1) call amr_init()
 	mech_solve_count = 0
-	if (mechanical_flag == 1) then
+	mech_parallel = (mechanical_flag == 1 .and. n_mech_threads > 0)
+	if (mechanical_flag == 1 .and. .not. mech_parallel) then
+		! Serial mode: init mechanical in main process
 		call init_mechanical()
 		call init_mech_history(Nnx, Nny, Nnz)
 	endif
@@ -78,6 +101,13 @@ program main
 
 	call StartTime
 	wall_start = omp_get_wtime()
+
+	! Set thermal thread count (parallel mode reduces from total)
+	if (mech_parallel) then
+		call omp_set_num_threads(n_thermal_threads)
+		write(9,'(A,I3,A,I3)') '  Parallel mechanical: thermal_threads=', &
+			n_thermal_threads, '  mech_threads=', n_mech_threads
+	endif
 
 	itertot=0
 	step_idx=0
@@ -331,34 +361,37 @@ program main
 
 !-----mechanical solver (every mech_interval steps)-----
 		if (mechanical_flag == 1 .and. mod(step_idx, mech_interval) == 0) then
-			call cpu_time(t_mech_cpu0)
-			call solve_mechanical(temp, solidfield, mech_res, mech_newton_iters, mech_cg_iters)
-			call get_stress_yield(sxx_out, syy_out, szz_out, vm_out, fplus_out)
-			mech_solve_count = mech_solve_count + 1
-			call cpu_time(t_mech_cpu1)
-			t_mech = t_mech + (t_mech_cpu1 - t_mech_cpu0)
-			mio_t_cpu = mio_t_cpu + (t_mech_cpu1 - t_mech_cpu0)
-			mio_n_solves = mio_n_solves + 1
+			if (mech_parallel) then
+				! Parallel mode: write binary input file, mechanical section picks it up
+				call write_mech_input(step_idx, timet, temp, solidfield)
+			else
+				! Serial mode: solve in-loop
+				call cpu_time(t_mech_cpu0)
+				call solve_mechanical(temp, solidfield, mech_res, mech_newton_iters, mech_cg_iters)
+				call get_stress_yield(sxx_out, syy_out, szz_out, vm_out, fplus_out)
+				mech_solve_count = mech_solve_count + 1
+				call cpu_time(t_mech_cpu1)
+				t_mech = t_mech + (t_mech_cpu1 - t_mech_cpu0)
+				mio_t_cpu = mio_t_cpu + (t_mech_cpu1 - t_mech_cpu0)
+				mio_n_solves = mio_n_solves + 1
 
-			! Report to output.txt
-			n_yield = count(fplus_out > 0.0_wp)
-			write(9,'(A,I6,A,es10.3,A,es10.3,A,I8)') &
-				'  Mech step', mech_solve_count, &
-				'  res=', mech_res, '  max_vm=', maxval(vm_out), &
-				'  yield_elems=', n_yield
+				n_yield = count(fplus_out > 0.0_wp)
+				write(9,'(A,I6,A,es10.3,A,es10.3,A,I8)') &
+					'  Mech step', mech_solve_count, &
+					'  res=', mech_res, '  max_vm=', maxval(vm_out), &
+					'  yield_elems=', n_yield
 
-			! Mechanical VTK output
-			if (mod(mech_solve_count, mech_output_interval) == 0) then
-				call write_mech_vtk(step_idx, T_fem_last, &
-					ux_mech, uy_mech, uz_mech, mech_phase, &
-					sxx_out, syy_out, szz_out, vm_out, fplus_out, &
+				if (mod(mech_solve_count, mech_output_interval) == 0) then
+					call write_mech_vtk(step_idx, T_fem_last, &
+						ux_mech, uy_mech, uz_mech, mech_phase, &
+						sxx_out, syy_out, szz_out, vm_out, fplus_out, &
+						Nnx, Nny, Nnz)
+				endif
+
+				call write_mech_history(timet, T_fem_last, &
+					ux_mech, uy_mech, uz_mech, sxx_out, syy_out, &
 					Nnx, Nny, Nnz)
 			endif
-
-			! Mechanical history
-			call write_mech_history(timet, T_fem_last, &
-				ux_mech, uy_mech, uz_mech, sxx_out, syy_out, &
-				Nnx, Nny, Nnz)
 		endif
 
 		call cpu_time(t0)
@@ -407,6 +440,9 @@ program main
 
 	end do time_loop
 
+	! Signal mechanical solver that thermal is done
+	if (mech_parallel) call write_mech_done()
+
 	! Post-simulation analysis (before EndTime closes output file)
 	call compute_defect_determ()
 	call write_defect_report()
@@ -415,7 +451,8 @@ program main
 	call finalize_thermal_history
 	call finalize_meltpool_history
 
-	if (mechanical_flag == 1) then
+	if (mechanical_flag == 1 .and. .not. mech_parallel) then
+		! Serial mode: finalize here
 		call write_mech_timing_report(file_prefix)
 		call write_mech_memory_report(file_prefix, Nx, Ny, Nz, Nnx, Nny, Nnz)
 		call finalize_mech_history()
@@ -427,5 +464,114 @@ program main
 
 	call write_timing_report(itertot, timet, wall_elapsed, file_prefix)
 	call write_memory_report(file_prefix)
+
+	! In parallel mode, mechanical runs as a separate process (launched by run.sh).
+	! run.sh handles waiting for both processes to complete.
+
 	stop
 	end
+
+!****************************************************************************
+subroutine run_mechanical_loop()
+! Parallel mechanical solver loop: polls for binary input files,
+! solves mechanical, writes VTK/history output.
+	use precision
+	use geometry, only: ni, nj, nk, x, y
+	use parameters
+	use omp_lib
+	use mechanical_solver
+	use mech_io
+	implicit none
+
+	real(wp), allocatable :: temp_buf(:,:,:), sf_buf(:,:,:)
+	real(wp), allocatable :: x_buf(:), y_buf(:), x_prev(:), y_prev(:)
+	integer  :: step_out, mech_count, n_yield, next_step
+	real(wp) :: time_out, mech_res
+	integer  :: mech_newton_iters, mech_cg_iters
+	real(wp) :: t0_cpu, t1_cpu
+	logical  :: found, grid_changed
+
+	! Set thread count for mechanical section
+	call omp_set_num_threads(n_mech_threads)
+
+	allocate(temp_buf(ni,nj,nk), sf_buf(ni,nj,nk))
+	allocate(x_buf(ni), y_buf(nj))
+	allocate(x_prev(ni), y_prev(nj))
+
+	call init_mechanical()
+	call init_mech_history(Nnx, Nny, Nnz)
+
+	x_prev = x(1:ni)
+	y_prev = y(1:nj)
+
+	mech_count = 0
+	next_step = mech_interval
+
+	do
+		! Poll for next input file
+		call read_mech_input(next_step, step_out, time_out, &
+			temp_buf, sf_buf, x_buf, y_buf, found)
+
+		if (.not. found) then
+			if (check_mech_done()) exit
+			call sleep(1)
+			cycle
+		endif
+
+		! Check if grid changed (AMR)
+		grid_changed = any(abs(x_buf(1:ni) - x_prev(1:ni)) > 1.0e-15_wp) .or. &
+		               any(abs(y_buf(1:nj) - y_prev(1:nj)) > 1.0e-15_wp)
+		if (grid_changed) then
+			! Update geometry arrays so update_mech_grid can read them
+			x(1:ni) = x_buf(1:ni)
+			y(1:nj) = y_buf(1:nj)
+			call update_mech_grid()
+			x_prev = x_buf
+			y_prev = y_buf
+		endif
+
+		! Solve mechanical
+		call cpu_time(t0_cpu)
+		call solve_mechanical(temp_buf, sf_buf, mech_res, mech_newton_iters, mech_cg_iters)
+		call get_stress_yield(sxx_out, syy_out, szz_out, vm_out, fplus_out)
+		mech_count = mech_count + 1
+		call cpu_time(t1_cpu)
+		mio_t_cpu = mio_t_cpu + (t1_cpu - t0_cpu)
+		mio_n_solves = mio_n_solves + 1
+
+		n_yield = count(fplus_out > 0.0_wp)
+		write(*,'(A,I6,A,I6,A,es10.3,A,es10.3,A,I8)') &
+			'  [MECH] step', step_out, '  solve', mech_count, &
+			'  res=', mech_res, '  max_vm=', maxval(vm_out), &
+			'  yield=', n_yield
+
+		! VTK output
+		if (mod(mech_count, mech_output_interval) == 0) then
+			call write_mech_vtk(step_out, T_fem_last, &
+				ux_mech, uy_mech, uz_mech, mech_phase, &
+				sxx_out, syy_out, szz_out, vm_out, fplus_out, &
+				Nnx, Nny, Nnz)
+		endif
+
+		! History
+		call write_mech_history(time_out, T_fem_last, &
+			ux_mech, uy_mech, uz_mech, sxx_out, syy_out, &
+			Nnx, Nny, Nnz)
+
+		next_step = next_step + mech_interval
+	enddo
+
+	! Finalize
+	call write_mech_timing_report(file_prefix)
+	call write_mech_memory_report(file_prefix, Nx, Ny, Nz, Nnx, Nny, Nnz)
+	call finalize_mech_history()
+	call finalize_mechanical_io()
+	call cleanup_mechanical()
+
+	deallocate(temp_buf, sf_buf, x_buf, y_buf, x_prev, y_prev)
+
+	! Clean up DONE sentinel
+	open(unit=95, file=trim(file_prefix)//'mech_DONE', status='old')
+	close(95, status='delete')
+
+end subroutine run_mechanical_loop

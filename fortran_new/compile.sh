@@ -47,7 +47,8 @@ gfortran -fopenmp -O3 -march=native *.o -o cluster_main
 
 echo "Build complete: cluster_main"
 echo ""
-echo "Usage: bash run.sh <case_name> [omp_threads] &"
-echo "  Example: bash run.sh baseline 4 &"
+echo "Usage: bash run.sh <case_name> [thermal_threads] [mech_threads] &"
+echo "  Example: bash run.sh baseline 4 &           # serial mechanical"
+echo "  Example: bash run.sh baseline 10 10 &        # parallel mechanical"
 echo "  Stop all:  kill \$(pgrep -f cluster_main)"
 echo "  Stop one:  ps aux | grep cluster_main  then  kill <PID>"
