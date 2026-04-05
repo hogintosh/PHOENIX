@@ -49,6 +49,13 @@ subroutine update_mech_phase(mech_phase, temp_arr, solidfield_arr, nnx, nny, nnz
 	z_top = z(nk)              ! top of domain
 	z_powder_min = z_top - layerheight  ! powder layer starts here
 
+	! DEBUG: check solidfield at domain center surface
+	i = nnx/2; j = nny/2; k = nnz
+	write(9,'(A,3I5,A,F8.1,A,F6.2,A,F10.6)') &
+		'  PHASE DBG: ijk=', i,j,k, &
+		' T=', temp_arr(i,j,k), ' sf=', solidfield_arr(i,j,k), &
+		' z=', fem_z_arr(k)*1e3
+
 	!$OMP PARALLEL DO PRIVATE(i,j,k)
 	do k = 1, nnz
 	do j = 1, nny

@@ -568,18 +568,27 @@ subroutine ebe_matvec_mech(ux, uy, uz, Aux, Auy, Auz, phase)
 	real(wp) :: dxe, dye, dze
 	integer  :: ie, je, ke, a, b, di, dj, dk, ln, dof
 	integer  :: color, ic, jc, kc
+	logical  :: need_recompute
 
 	Aux = 0.0_wp; Auy = 0.0_wp; Auz = 0.0_wp
 
 	do color = 0, 7
 		ic = mod(color, 2); jc = mod(color/2, 2); kc = mod(color/4, 2)
 
-		!$OMP PARALLEL DO PRIVATE(ie,je,ke,xe,Axe,Ke_loc,dxe,dye,dze,a,b,di,dj,dk,ln,dof) COLLAPSE(3)
+		!$OMP PARALLEL DO PRIVATE(ie,je,ke,xe,Axe,Ke_loc,dxe,dye,dze,a,b,di,dj,dk,ln,dof,need_recompute) COLLAPSE(3)
 		do ke = 1 + kc, Nz, 2
 		do je = 1 + jc, Ny, 2
 		do ie = 1 + ic, Nx, 2
-			! Use precomputed per-layer Ke (dx/dy uniform, dz varies per layer)
-			if (elem_phase(ie,je,ke) /= MECH_POWDER) then
+			! Boundary elements may have non-uniform dx/dy — recompute Ke
+			need_recompute = (ie == Nx) .or. (je == Ny)
+			if (need_recompute) then
+				call get_elem_dx(ie, je, ke, dxe, dye, dze)
+				if (elem_phase(ie,je,ke) /= MECH_POWDER) then
+					call compute_Ke_uniform(E_solid, nu_mech, dxe, dye, dze, Ke_loc)
+				else
+					call compute_Ke_uniform(E_soft, nu_mech, dxe, dye, dze, Ke_loc)
+				endif
+			else if (elem_phase(ie,je,ke) /= MECH_POWDER) then
 				Ke_loc = Ke_solid_z(:,:,ke)
 			else
 				Ke_loc = Ke_soft_z(:,:,ke)
@@ -655,7 +664,15 @@ subroutine solve_mech_cg(ux, uy, uz, fx, fy, fz, phase, cg_iters_out)
 	do ke = 1, Nz
 	do je = 1, Ny
 	do ie = 1, Nx
-		if (elem_phase(ie,je,ke) /= MECH_POWDER) then
+		! Boundary elements may have non-uniform dx/dy — recompute Ke
+		if ((ie == Nx) .or. (je == Ny)) then
+			call get_elem_dx(ie, je, ke, dxe, dye, dze)
+			if (elem_phase(ie,je,ke) /= MECH_POWDER) then
+				call compute_Ke_uniform(E_solid, nu_mech, dxe, dye, dze, Ke_loc)
+			else
+				call compute_Ke_uniform(E_soft, nu_mech, dxe, dye, dze, Ke_loc)
+			endif
+		else if (elem_phase(ie,je,ke) /= MECH_POWDER) then
 			Ke_loc = Ke_solid_z(:,:,ke)
 		else
 			Ke_loc = Ke_soft_z(:,:,ke)
