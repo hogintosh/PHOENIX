@@ -229,17 +229,31 @@ end subroutine write_mech_scalar_int
 
 !********************************************************************
 subroutine write_mech_timing_report(file_prefix_in)
+	use parameters, only: n_mech_threads, n_thermal_threads
 	character(len=*), intent(in) :: file_prefix_in
 	integer, parameter :: lun = 92
+	integer :: ihr, imin, isec
 
 	open(unit=lun, file=trim(file_prefix_in)//'mech_timing_report.txt', action='write', status='replace')
 	write(lun,'(a)') '============================================'
 	write(lun,'(a)') '  PHOENIX Mechanical Solver Timing Report'
 	write(lun,'(a)') '============================================'
+	if (n_mech_threads > 0) then
+		write(lun,'(a)')        '  Mode:                parallel (separate process)'
+		write(lun,'(a,i0)')     '  Thermal threads:     ', n_thermal_threads
+		write(lun,'(a,i0)')     '  Mechanical threads:  ', n_mech_threads
+	else
+		write(lun,'(a)')        '  Mode:                serial (in-loop)'
+	endif
 	write(lun,'(a,i0)')     '  Solves performed:    ', mio_n_solves
 	write(lun,'(a,f12.3,a)') '  Total CPU time:      ', mio_t_cpu, ' s'
 	write(lun,'(a,f12.3,a)') '  Total wall time:     ', mio_t_wall, ' s'
+	ihr  = int(mio_t_wall) / 3600
+	imin = mod(int(mio_t_wall), 3600) / 60
+	isec = mod(int(mio_t_wall), 60)
+	write(lun,'(a,i4,a,i2,a,i2)') '                       ', ihr, ' hr ', imin, ' min ', isec
 	if (mio_n_solves > 0) then
+		write(lun,'(a,f12.3,a)') '  Avg CPU per solve:   ', mio_t_cpu / real(mio_n_solves, wp), ' s'
 		write(lun,'(a,f12.3,a)') '  Avg wall per solve:  ', mio_t_wall / real(mio_n_solves, wp), ' s'
 	endif
 	write(lun,'(a,i0)')     '  VTK files written:   ', n_mech_vtk

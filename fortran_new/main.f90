@@ -453,6 +453,7 @@ program main
 
 	if (mechanical_flag == 1 .and. .not. mech_parallel) then
 		! Serial mode: finalize here
+		mio_t_wall = t_mech  ! approximate wall time from CPU time
 		call write_mech_timing_report(file_prefix)
 		call write_mech_memory_report(file_prefix, Nx, Ny, Nz, Nnx, Nny, Nnz)
 		call finalize_mech_history()
@@ -488,11 +489,12 @@ subroutine run_mechanical_loop()
 	integer  :: step_out, mech_count, n_yield, next_step
 	real(wp) :: time_out, mech_res
 	integer  :: mech_newton_iters, mech_cg_iters
-	real(wp) :: t0_cpu, t1_cpu
+	real(wp) :: t0_cpu, t1_cpu, wall_mech_start
 	logical  :: found, grid_changed
 
 	! Set thread count for mechanical section
 	call omp_set_num_threads(n_mech_threads)
+	wall_mech_start = omp_get_wtime()
 
 	allocate(temp_buf(ni,nj,nk), sf_buf(ni,nj,nk))
 	allocate(x_buf(ni), y_buf(nj))
@@ -562,6 +564,7 @@ subroutine run_mechanical_loop()
 	enddo
 
 	! Finalize
+	mio_t_wall = omp_get_wtime() - wall_mech_start
 	call write_mech_timing_report(file_prefix)
 	call write_mech_memory_report(file_prefix, Nx, Ny, Nz, Nnx, Nny, Nnz)
 	call finalize_mech_history()
