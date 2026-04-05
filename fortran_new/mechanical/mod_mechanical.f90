@@ -240,11 +240,17 @@ subroutine update_mech_grid(T_phoenix)
 	fem_y(Nny) = y(njm1)
 	fem_z(Nnz) = z(nkm1)
 
-	! (3) Interpolate displacement fields from old grid to new grid
+	! (3a) Interpolate displacement fields from old grid to new grid
 	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, ux_mech)
 	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uy_mech)
 	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uz_mech)
 	ux_mech(:,:,1) = 0.0_wp; uy_mech(:,:,1) = 0.0_wp; uz_mech(:,:,1) = 0.0_wp
+
+	! (3b) Interpolate Gauss-point stress from old grid to new grid
+	call mech_interp_gp_field(fem_x_old, fem_y_old, fem_x, fem_y, sig_gp)
+
+	! (3c) Interpolate yield function (node-centered)
+	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, f_plus)
 
 	deallocate(fem_x_old, fem_y_old)
 
@@ -368,6 +374,81 @@ subroutine mech_interp_node_field(x_old, y_old, x_new, y_new, field)
 	field = tmp
 	deallocate(tmp)
 end subroutine mech_interp_node_field
+
+!********************************************************************
+subroutine mech_interp_gp_field(x_old, y_old, x_new, y_new, gp_field)
+! Bilinear interpolation of element-centered GP field (sig_gp or eps_gp)
+! from old grid to new grid. Uses element center coordinates.
+! Z unchanged (AMR only affects X, Y).
+	real(wp), intent(in)    :: x_old(Nnx), y_old(Nny)
+	real(wp), intent(in)    :: x_new(Nnx), y_new(Nny)
+	real(wp), intent(inout) :: gp_field(6, 8, Nx, Ny, Nz)
+
+	real(wp), allocatable :: tmp(:,:,:,:,:)
+	real(wp), allocatable :: xc_old(:), yc_old(:), xc_new(:), yc_new(:)
+	integer  :: ie, je, ke, g, c, i1, i2, j1, j2
+	real(wp) :: xn, yn, wx, wy
+
+	! Compute element center coordinates (old and new)
+	allocate(xc_old(Nx), yc_old(Ny), xc_new(Nx), yc_new(Ny))
+	do ie = 1, Nx
+		xc_old(ie) = 0.5_wp * (x_old(ie) + x_old(ie+1))
+		xc_new(ie) = 0.5_wp * (x_new(ie) + x_new(ie+1))
+	enddo
+	do je = 1, Ny
+		yc_old(je) = 0.5_wp * (y_old(je) + y_old(je+1))
+		yc_new(je) = 0.5_wp * (y_new(je) + y_new(je+1))
+	enddo
+
+	allocate(tmp(6, 8, Nx, Ny, Nz))
+
+	!$OMP PARALLEL DO PRIVATE(ie,je,ke,g,c,i1,i2,j1,j2,xn,yn,wx,wy) COLLAPSE(2)
+	do ke = 1, Nz
+	do je = 1, Ny
+		yn = yc_new(je)
+		j1 = 1
+		do j1 = 1, Ny-1
+			if (yc_old(j1+1) >= yn) exit
+		enddo
+		j2 = min(j1 + 1, Ny)
+		if (j1 == j2) then
+			wy = 0.0_wp
+		else
+			wy = (yn - yc_old(j1)) / (yc_old(j2) - yc_old(j1))
+			wy = max(0.0_wp, min(1.0_wp, wy))
+		endif
+
+		do ie = 1, Nx
+			xn = xc_new(ie)
+			i1 = 1
+			do i1 = 1, Nx-1
+				if (xc_old(i1+1) >= xn) exit
+			enddo
+			i2 = min(i1 + 1, Nx)
+			if (i1 == i2) then
+				wx = 0.0_wp
+			else
+				wx = (xn - xc_old(i1)) / (xc_old(i2) - xc_old(i1))
+				wx = max(0.0_wp, min(1.0_wp, wx))
+			endif
+
+			do g = 1, 8
+			do c = 1, 6
+				tmp(c,g,ie,je,ke) = &
+					(1.0_wp-wx)*(1.0_wp-wy) * gp_field(c,g,i1,j1,ke) &
+					+ wx*(1.0_wp-wy)         * gp_field(c,g,i2,j1,ke) &
+					+ (1.0_wp-wx)*wy         * gp_field(c,g,i1,j2,ke) &
+					+ wx*wy                  * gp_field(c,g,i2,j2,ke)
+			enddo
+			enddo
+		enddo
+	enddo
+	enddo
+	!$OMP END PARALLEL DO
+
+	gp_field = tmp
+	deallocate(tmp, xc_old, yc_old, xc_new, yc_new)
+end subroutine mech_interp_gp_field
 
 !********************************************************************
 subroutine cleanup_mechanical()
