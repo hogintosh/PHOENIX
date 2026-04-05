@@ -387,15 +387,53 @@ end subroutine
 
 ---
 
+## Phase 5: AMR Compatibility (completed 2026-04-05)
+
+### Task 5.1: FEM mesh sync after AMR remesh
+- Added `update_mech_grid()` called after `amr_regenerate_grid()` in main.f90
+- Refreshes `fem_x`, `fem_y`, `fem_z` from current PHOENIX grid
+- Recomputes precomputed `Ke_solid_z`/`Ke_soft_z` for per-layer fallback
+- Detects grid uniformity (`grid_uniform` flag) with 1% tolerance
+
+### Task 5.2: Matrix-free matvec for non-uniform grids
+- `ebe_matvec_mech`: two paths based on `grid_uniform`
+  - Uniform: precomputed per-layer Ke (fast, unchanged from original)
+  - Non-uniform: matrix-free `B^T C B u` per GP (~5x faster than assembling Ke per element)
+- Precomputed shape function derivatives: `dNdxi_gp(8,8)`, `dNdeta_gp(8,8)`, `dNdzeta_gp(8,8)`
+- Jacobi preconditioner also uses matrix-free diagonal for non-uniform grids
+
+### Task 5.3: Field interpolation after AMR remesh
+All persistent mechanical fields interpolated from old grid to new grid:
+- **Nearest-neighbor** (no diffusion): `ux/uy/uz_mech`, `sig_gp`, `f_plus`, `T_old_mech`
+- **Recomputed**: `eps_gp = B_new * u_interp` (ensures consistency with interpolated u)
+- **Not interpolated** (recomputed each solve): `elem_phase`, `mech_phase`, `sxx/syy/szz/vm_out`
+
+Design choice: nearest-neighbor over bilinear to prevent cumulative stress/displacement diffusion across repeated AMR cycles.
+
+### Task 5.4: Boundary element Ke fix
+- Last FEM element has non-uniform dx/dy (1.5x) due to forced boundary alignment
+- `ebe_matvec_mech` and `compute_residual` used different Ke → CG inconsistency
+- Fixed by detecting non-uniform grid and using per-element Ke
+
+### Task 5.5: GIF output update
+- `finalize_mechanical_io` in `mod_mech_io.f90` generates `plot_deformation.py`
+- Von Mises stress (jet colormap) instead of phase field
+- matplotlib + imageio rendering (no GPU/Xvfb needed)
+- Outputs GIF animation + final frame PNG
+
+---
+
 ## Key Design Decisions
 
 1. **Separate subfolder** `mechanical/` keeps FEM code organized and independent from CFD modules
-2. **Same mesh as thermal**: mechanical solver runs on the simulation mesh (same as temperature). With AMR, Ke is computed per element using actual non-uniform spacing. Mechanical fields are interpolated during AMR remesh (ux/uy/uz bilinear, GP state reset to zero).
+2. **Coarsened FEM mesh**: FEM nodes sample every `mech_mesh_ratio`-th thermal cell center. Last node forced to domain boundary. With AMR, dx/dy become non-uniform → matrix-free matvec.
 3. **Parameters in module header**: `E_solid`, `nu`, `sig_yield`, etc. defined as `parameter` constants in `mod_mech_material.f90`, not in inputfile (reduces input complexity)
 4. **One-way coupling**: T → stress only. No feedback from displacement to temperature.
-5. **Solve interval**: every `mech_interval=10` timesteps (mechanical equilibrium is quasi-static, doesn't need every thermal step)
+5. **Solve interval**: every `mech_interval` timesteps (mechanical equilibrium is quasi-static, doesn't need every thermal step)
 6. **Separate VTK**: mechanical results in `_mech_NNNNN.vtk`, not mixed with thermal vtkmov files
 7. **GP state arrays**: `sig_gp` and `eps_gp` are essential for incremental plasticity — cannot be avoided. Memory scales as 96 × N_elements × 8 bytes.
+8. **Nearest-neighbor interpolation for AMR**: bilinear interpolation causes cumulative diffusion of stress/displacement over repeated AMR cycles. Nearest-neighbor preserves magnitudes at the cost of sub-element spatial offset (acceptable for small AMR grid changes per cycle).
+9. **Matrix-free matvec**: for non-uniform grids, compute `B^T(C(Bu))` directly per GP instead of assembling 24×24 Ke. ~5x faster than on-the-fly Ke assembly, correct for any element size.
 
 ## Future: Thermal-Mechanical Overlap (deferred)
 
@@ -412,3 +450,4 @@ Considered running thermal and mechanical concurrently on separate thread groups
 - The 8-color coloring for OpenMP is identical to standard structured-grid FEM parallelization
 - J2 plasticity with radial return is the simplest metal plasticity model — sufficient for residual stress estimation
 - `fplus > 0` indicates plastic yielding has occurred — useful for identifying plastically deformed regions
+- AMR compatibility adds ~5-10% result difference vs uniform mesh due to resolution variation in coarser regions
