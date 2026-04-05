@@ -30,6 +30,8 @@ module mechanical_solver
 	! For uniform x-y (AMR refined region may have varying dx/dy — use per-element B if needed)
 	! Simplified: precompute per-element Jacobian using actual node spacing
 	real(wp) :: N_gp(8,8)           ! Shape functions at 8 GPs
+	! Precomputed shape function derivatives in reference coords (node, GP)
+	real(wp) :: dNdxi_gp(8,8), dNdeta_gp(8,8), dNdzeta_gp(8,8)
 
 	! Precomputed element stiffness per Z-layer (dx/dy uniform, dz varies per layer)
 	real(wp), allocatable :: Ke_solid_z(:,:,:)  ! (24,24,Nz)
@@ -155,6 +157,7 @@ subroutine init_mechanical()
 	gp_c(2) =  1.0_wp / sqrt(3.0_wp)
 
 	N_gp = 0.0_wp
+	dNdxi_gp = 0.0_wp; dNdeta_gp = 0.0_wp; dNdzeta_gp = 0.0_wp
 	g = 0
 	do k = 1, 2
 	do j = 1, 2
@@ -164,6 +167,12 @@ subroutine init_mechanical()
 		do inode = 1, 8
 			N_gp(inode, g) = (1.0_wp + xi_n(inode)*xi) * (1.0_wp + eta_n(inode)*eta_q) &
 			                * (1.0_wp + zeta_n(inode)*zeta) / 8.0_wp
+			dNdxi_gp(inode, g)   = xi_n(inode) * (1.0_wp + eta_n(inode)*eta_q) &
+			                     * (1.0_wp + zeta_n(inode)*zeta) / 8.0_wp
+			dNdeta_gp(inode, g)  = (1.0_wp + xi_n(inode)*xi) * eta_n(inode) &
+			                     * (1.0_wp + zeta_n(inode)*zeta) / 8.0_wp
+			dNdzeta_gp(inode, g) = (1.0_wp + xi_n(inode)*xi) &
+			                     * (1.0_wp + eta_n(inode)*eta_q) * zeta_n(inode) / 8.0_wp
 		enddo
 	enddo
 	enddo
@@ -204,13 +213,20 @@ end subroutine init_mechanical
 subroutine update_mech_grid(T_phoenix)
 ! Refresh FEM mesh after AMR remesh. AMR changes x, y coordinate values
 ! but NOT ni, nj (topology preserved), so array sizes remain valid.
-! Updates: (1) fem_x/y/z, (2) precomputed Ke, (3) eps_gp, (4) T_old_mech.
+! Steps: (1) save old coords, (2) update coords, (3) interpolate u,
+! (4) update Ke, (5) recompute eps_gp, (6) refresh T_old_mech.
 	real(wp), intent(in) :: T_phoenix(:,:,:)
 	integer :: i, j, k, ie, je, ke, di, dj, dk, ln, dof, g, p, q
 	real(wp) :: dx_ref, dy_ref, dz_ref, dxe, dye, dze
 	real(wp) :: u_e(24), B_gp(6,24), eps_curr(6)
+	real(wp), allocatable :: fem_x_old(:), fem_y_old(:)
 
-	! (1) Refresh FEM node coordinates from current PHOENIX grid
+	! (1) Save old FEM coordinates before update
+	allocate(fem_x_old(Nnx), fem_y_old(Nny))
+	fem_x_old = fem_x
+	fem_y_old = fem_y
+
+	! (2) Refresh FEM node coordinates from current PHOENIX grid
 	do i = 1, Nnx
 		fem_x(i) = x(min(2 + (i-1)*mratio, nim1))
 	enddo
@@ -223,6 +239,14 @@ subroutine update_mech_grid(T_phoenix)
 	fem_x(Nnx) = x(nim1)
 	fem_y(Nny) = y(njm1)
 	fem_z(Nnz) = z(nkm1)
+
+	! (3) Interpolate displacement fields from old grid to new grid
+	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, ux_mech)
+	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uy_mech)
+	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uz_mech)
+	ux_mech(:,:,1) = 0.0_wp; uy_mech(:,:,1) = 0.0_wp; uz_mech(:,:,1) = 0.0_wp
+
+	deallocate(fem_x_old, fem_y_old)
 
 	! Check if dx/dy are uniform (tolerance: 1% relative)
 	dx_ref = fem_x(2) - fem_x(1)
@@ -241,7 +265,7 @@ subroutine update_mech_grid(T_phoenix)
 		enddo
 	endif
 
-	! (2) Recompute precomputed Ke
+	! (4) Recompute precomputed Ke
 	dz_ref = fem_z(2) - fem_z(1)
 	call compute_Ke_uniform(E_solid, nu_mech, dx_ref, dy_ref, dz_ref, Ke_solid)
 	call compute_Ke_uniform(E_soft,  nu_mech, dx_ref, dy_ref, dz_ref, Ke_soft)
@@ -251,26 +275,18 @@ subroutine update_mech_grid(T_phoenix)
 		call compute_Ke_uniform(E_soft,  nu_mech, dx_ref, dy_ref, dz_ref, Ke_soft_z(:,:,k))
 	enddo
 
-	! (3) Recompute eps_gp from current displacements using new B matrices.
-	! Without this, eps_inc = B_new*u - eps_gp_old is inconsistent → NaN.
+	! (5) Recompute eps_gp from interpolated displacements using new B.
 	!$OMP PARALLEL DO PRIVATE(ie,je,ke,u_e,B_gp,eps_curr,dxe,dye,dze,di,dj,dk,ln,dof,g,p,q) COLLAPSE(3)
 	do ke = 1, Nz
 	do je = 1, Ny
 	do ie = 1, Nx
 		call get_elem_dx(ie, je, ke, dxe, dye, dze)
-
-		do dk = 0, 1
-		do dj = 0, 1
-		do di = 0, 1
-			ln = 1 + di + 2*dj + 4*dk
-			dof = 3*(ln-1)
+		do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+			ln = 1 + di + 2*dj + 4*dk; dof = 3*(ln-1)
 			u_e(dof+1) = ux_mech(ie+di, je+dj, ke+dk)
 			u_e(dof+2) = uy_mech(ie+di, je+dj, ke+dk)
 			u_e(dof+3) = uz_mech(ie+di, je+dj, ke+dk)
-		enddo
-		enddo
-		enddo
-
+		enddo; enddo; enddo
 		do g = 1, 8
 			call get_B_at_gp(dxe, dye, dze, g, B_gp)
 			do p = 1, 6
@@ -286,12 +302,72 @@ subroutine update_mech_grid(T_phoenix)
 	enddo
 	!$OMP END PARALLEL DO
 
-	! (4) Refresh T_old_mech from current temperature on new grid.
-	! Without this, dT = T_new - T_old contains spurious thermal strain
-	! from the grid coordinate change (not actual temperature change).
+	! (6) Refresh T_old_mech from current temperature on new grid.
 	call extract_temp_to_fem(T_phoenix, T_old_mech)
 
 end subroutine update_mech_grid
+
+!********************************************************************
+subroutine mech_interp_node_field(x_old, y_old, x_new, y_new, field)
+! Bilinear interpolation of a node-centered FEM field from old to new grid.
+! Z is unchanged (AMR only affects X, Y). Same-size grids (Nnx, Nny, Nnz).
+	real(wp), intent(in)    :: x_old(Nnx), y_old(Nny)
+	real(wp), intent(in)    :: x_new(Nnx), y_new(Nny)
+	real(wp), intent(inout) :: field(Nnx, Nny, Nnz)
+
+	real(wp), allocatable :: tmp(:,:,:)
+	integer  :: i, j, k, i1, i2, j1, j2, jlo
+	real(wp) :: xn, yn, wx, wy
+
+	allocate(tmp(Nnx, Nny, Nnz))
+
+	! Build x-map: for each new x(i), find bracketing old interval
+	! Then interpolate bilinearly
+	!$OMP PARALLEL DO PRIVATE(i,j,k,i1,i2,j1,j2,jlo,xn,yn,wx,wy)
+	do k = 1, Nnz
+		jlo = 1
+		do j = 1, Nny
+			yn = y_new(j)
+			! Find bracketing old y interval (monotone sweep)
+			j1 = 1
+			do j1 = 1, Nny-1
+				if (y_old(j1+1) >= yn) exit
+			enddo
+			j2 = min(j1 + 1, Nny)
+			if (j1 == j2) then
+				wy = 0.0_wp
+			else
+				wy = (yn - y_old(j1)) / (y_old(j2) - y_old(j1))
+				wy = max(0.0_wp, min(1.0_wp, wy))
+			endif
+
+			do i = 1, Nnx
+				xn = x_new(i)
+				! Find bracketing old x interval
+				i1 = 1
+				do i1 = 1, Nnx-1
+					if (x_old(i1+1) >= xn) exit
+				enddo
+				i2 = min(i1 + 1, Nnx)
+				if (i1 == i2) then
+					wx = 0.0_wp
+				else
+					wx = (xn - x_old(i1)) / (x_old(i2) - x_old(i1))
+					wx = max(0.0_wp, min(1.0_wp, wx))
+				endif
+
+				tmp(i,j,k) = (1.0_wp-wx)*(1.0_wp-wy) * field(i1,j1,k) &
+				            + wx*(1.0_wp-wy)           * field(i2,j1,k) &
+				            + (1.0_wp-wx)*wy           * field(i1,j2,k) &
+				            + wx*wy                    * field(i2,j2,k)
+			enddo
+		enddo
+	enddo
+	!$OMP END PARALLEL DO
+
+	field = tmp
+	deallocate(tmp)
+end subroutine mech_interp_node_field
 
 !********************************************************************
 subroutine cleanup_mechanical()
@@ -675,8 +751,11 @@ subroutine ebe_matvec_mech(ux, uy, uz, Aux, Auy, Auz, phase)
 	integer,  intent(in)  :: phase(Nnx,Nny,Nnz)
 
 	real(wp) :: xe(24), Axe(24), Ke_loc(24,24)
-	real(wp) :: dxe, dye, dze
-	integer  :: ie, je, ke, a, b, di, dj, dk, ln, dof
+	real(wp) :: dxe, dye, dze, inv_dx, inv_dy, inv_dz, det_J
+	real(wp) :: lam, mu, eps(6), sig(6)
+	real(wp) :: dN_dx(8), dN_dy(8), dN_dz(8)
+	real(wp) :: ux_e(8), uy_e(8), uz_e(8)
+	integer  :: ie, je, ke, a, b, di, dj, dk, ln, dof, g
 	integer  :: color, ic, jc, kc
 
 	Aux = 0.0_wp; Auy = 0.0_wp; Auz = 0.0_wp
@@ -684,63 +763,122 @@ subroutine ebe_matvec_mech(ux, uy, uz, Aux, Auy, Auz, phase)
 	do color = 0, 7
 		ic = mod(color, 2); jc = mod(color/2, 2); kc = mod(color/4, 2)
 
-		!$OMP PARALLEL DO PRIVATE(ie,je,ke,xe,Axe,Ke_loc,dxe,dye,dze,a,b,di,dj,dk,ln,dof) COLLAPSE(3)
-		do ke = 1 + kc, Nz, 2
-		do je = 1 + jc, Ny, 2
-		do ie = 1 + ic, Nx, 2
-			! Get Ke: precomputed if uniform grid, on-the-fly if AMR non-uniform
-			if (grid_uniform) then
+		if (grid_uniform) then
+			! === Fast path: precomputed Ke ===
+			!$OMP PARALLEL DO PRIVATE(ie,je,ke,xe,Axe,Ke_loc,a,b,di,dj,dk,ln,dof) COLLAPSE(3)
+			do ke = 1 + kc, Nz, 2
+			do je = 1 + jc, Ny, 2
+			do ie = 1 + ic, Nx, 2
 				if (elem_phase(ie,je,ke) /= MECH_POWDER) then
 					Ke_loc = Ke_solid_z(:,:,ke)
 				else
 					Ke_loc = Ke_soft_z(:,:,ke)
 				endif
-			else
+
+				do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+					ln = 1 + di + 2*dj + 4*dk; dof = 3*(ln-1)
+					xe(dof+1) = ux(ie+di,je+dj,ke+dk)
+					xe(dof+2) = uy(ie+di,je+dj,ke+dk)
+					xe(dof+3) = uz(ie+di,je+dj,ke+dk)
+				enddo; enddo; enddo
+
+				Axe = 0.0_wp
+				do b = 1, 24
+				do a = 1, 24
+					Axe(a) = Axe(a) + Ke_loc(a,b) * xe(b)
+				enddo
+				enddo
+
+				do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+					ln = 1 + di + 2*dj + 4*dk; dof = 3*(ln-1)
+					Aux(ie+di,je+dj,ke+dk) = Aux(ie+di,je+dj,ke+dk) + Axe(dof+1)
+					Auy(ie+di,je+dj,ke+dk) = Auy(ie+di,je+dj,ke+dk) + Axe(dof+2)
+					Auz(ie+di,je+dj,ke+dk) = Auz(ie+di,je+dj,ke+dk) + Axe(dof+3)
+				enddo; enddo; enddo
+			enddo
+			enddo
+			enddo
+			!$OMP END PARALLEL DO
+		else
+			! === Matrix-free path: B^T C B u per GP, no Ke assembly ===
+			!$OMP PARALLEL DO PRIVATE(ie,je,ke,Axe,dxe,dye,dze,inv_dx,inv_dy,inv_dz,det_J) &
+			!$OMP   PRIVATE(lam,mu,eps,sig,dN_dx,dN_dy,dN_dz,ux_e,uy_e,uz_e,di,dj,dk,ln,g,a) COLLAPSE(3)
+			do ke = 1 + kc, Nz, 2
+			do je = 1 + jc, Ny, 2
+			do ie = 1 + ic, Nx, 2
 				call get_elem_dx(ie, je, ke, dxe, dye, dze)
+				inv_dx = 2.0_wp / dxe; inv_dy = 2.0_wp / dye; inv_dz = 2.0_wp / dze
+				det_J = (dxe * dye * dze) / 8.0_wp
+
+				! Material: Lame parameters
 				if (elem_phase(ie,je,ke) /= MECH_POWDER) then
-					call compute_Ke_uniform(E_solid, nu_mech, dxe, dye, dze, Ke_loc)
+					lam = E_solid * nu_mech / ((1.0_wp+nu_mech)*(1.0_wp-2.0_wp*nu_mech))
+					mu  = E_solid / (2.0_wp*(1.0_wp+nu_mech))
 				else
-					call compute_Ke_uniform(E_soft, nu_mech, dxe, dye, dze, Ke_loc)
+					lam = E_soft * nu_mech / ((1.0_wp+nu_mech)*(1.0_wp-2.0_wp*nu_mech))
+					mu  = E_soft / (2.0_wp*(1.0_wp+nu_mech))
 				endif
-			endif
 
-			! Gather
-			do dk = 0, 1
-			do dj = 0, 1
-			do di = 0, 1
-				ln = 1 + di + 2*dj + 4*dk
-				dof = 3*(ln-1)
-				xe(dof+1) = ux(ie+di, je+dj, ke+dk)
-				xe(dof+2) = uy(ie+di, je+dj, ke+dk)
-				xe(dof+3) = uz(ie+di, je+dj, ke+dk)
-			enddo
-			enddo
-			enddo
+				! Gather (separate components for efficiency)
+				do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+					ln = 1 + di + 2*dj + 4*dk
+					ux_e(ln) = ux(ie+di,je+dj,ke+dk)
+					uy_e(ln) = uy(ie+di,je+dj,ke+dk)
+					uz_e(ln) = uz(ie+di,je+dj,ke+dk)
+				enddo; enddo; enddo
 
-			! Ke * xe
-			Axe = 0.0_wp
-			do b = 1, 24
-			do a = 1, 24
-				Axe(a) = Axe(a) + Ke_loc(a,b) * xe(b)
-			enddo
-			enddo
+				Axe = 0.0_wp
 
-			! Scatter
-			do dk = 0, 1
-			do dj = 0, 1
-			do di = 0, 1
-				ln = 1 + di + 2*dj + 4*dk
-				dof = 3*(ln-1)
-				Aux(ie+di, je+dj, ke+dk) = Aux(ie+di, je+dj, ke+dk) + Axe(dof+1)
-				Auy(ie+di, je+dj, ke+dk) = Auy(ie+di, je+dj, ke+dk) + Axe(dof+2)
-				Auz(ie+di, je+dj, ke+dk) = Auz(ie+di, je+dj, ke+dk) + Axe(dof+3)
+				do g = 1, 8
+					! Shape function derivatives in physical coords
+					dN_dx = dNdxi_gp(:,g)   * inv_dx
+					dN_dy = dNdeta_gp(:,g)   * inv_dy
+					dN_dz = dNdzeta_gp(:,g) * inv_dz
+
+					! Strain: eps = B * u
+					eps(1) = 0.0_wp; eps(2) = 0.0_wp; eps(3) = 0.0_wp
+					eps(4) = 0.0_wp; eps(5) = 0.0_wp; eps(6) = 0.0_wp
+					do a = 1, 8
+						eps(1) = eps(1) + dN_dx(a) * ux_e(a)
+						eps(2) = eps(2) + dN_dy(a) * uy_e(a)
+						eps(3) = eps(3) + dN_dz(a) * uz_e(a)
+						eps(4) = eps(4) + dN_dy(a) * ux_e(a) + dN_dx(a) * uy_e(a)
+						eps(5) = eps(5) + dN_dz(a) * ux_e(a) + dN_dx(a) * uz_e(a)
+						eps(6) = eps(6) + dN_dz(a) * uy_e(a) + dN_dy(a) * uz_e(a)
+					enddo
+
+					! Stress: sig = C * eps (exploit isotropic structure)
+					sig(1) = (lam + 2.0_wp*mu)*eps(1) + lam*eps(2) + lam*eps(3)
+					sig(2) = lam*eps(1) + (lam + 2.0_wp*mu)*eps(2) + lam*eps(3)
+					sig(3) = lam*eps(1) + lam*eps(2) + (lam + 2.0_wp*mu)*eps(3)
+					sig(4) = mu * eps(4)
+					sig(5) = mu * eps(5)
+					sig(6) = mu * eps(6)
+
+					! Accumulate f_e = B^T * sig * detJ
+					do a = 1, 8
+						ln = 3*(a-1)
+						Axe(ln+1) = Axe(ln+1) + (dN_dx(a)*sig(1) + dN_dy(a)*sig(4) &
+						           + dN_dz(a)*sig(5)) * det_J
+						Axe(ln+2) = Axe(ln+2) + (dN_dy(a)*sig(2) + dN_dx(a)*sig(4) &
+						           + dN_dz(a)*sig(6)) * det_J
+						Axe(ln+3) = Axe(ln+3) + (dN_dz(a)*sig(3) + dN_dx(a)*sig(5) &
+						           + dN_dy(a)*sig(6)) * det_J
+					enddo
+				enddo
+
+				! Scatter
+				do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+					ln = 1 + di + 2*dj + 4*dk
+					Aux(ie+di,je+dj,ke+dk) = Aux(ie+di,je+dj,ke+dk) + Axe(3*(ln-1)+1)
+					Auy(ie+di,je+dj,ke+dk) = Auy(ie+di,je+dj,ke+dk) + Axe(3*(ln-1)+2)
+					Auz(ie+di,je+dj,ke+dk) = Auz(ie+di,je+dj,ke+dk) + Axe(3*(ln-1)+3)
+				enddo; enddo; enddo
 			enddo
 			enddo
 			enddo
-		enddo
-		enddo
-		enddo
-		!$OMP END PARALLEL DO
+			!$OMP END PARALLEL DO
+		endif
 	enddo
 
 	! Dirichlet BC
@@ -761,7 +899,8 @@ subroutine solve_mech_cg(ux, uy, uz, fx, fy, fz, phase, cg_iters_out)
 	real(wp), allocatable :: diag_inv(:,:,:)
 	real(wp) :: rz_old, rz_new, pAp, alpha_cg, beta_cg, rnorm, bnorm
 	real(wp) :: dxe, dye, dze, Ke_loc(24,24)
-	integer  :: iter, ie, je, ke, di, dj, dk, ln, dof
+	real(wp) :: inv_dx, inv_dy, inv_dz, det_J, lam, mu, diag_val
+	integer  :: iter, ie, je, ke, di, dj, dk, ln, dof, g, a
 
 	allocate(rx(Nnx,Nny,Nnz), ry(Nnx,Nny,Nnz), rz_arr(Nnx,Nny,Nnz))
 	allocate(zx(Nnx,Nny,Nnz), zy(Nnx,Nny,Nnz), zz_arr(Nnx,Nny,Nnz))
@@ -769,33 +908,55 @@ subroutine solve_mech_cg(ux, uy, uz, fx, fy, fz, phase, cg_iters_out)
 	allocate(Apx(Nnx,Nny,Nnz), Apy(Nnx,Nny,Nnz), Apz(Nnx,Nny,Nnz))
 	allocate(diag_inv(Nnx,Nny,Nnz))
 
-	! Jacobi preconditioner: assemble diagonal
+	! Jacobi preconditioner: assemble diagonal of K
 	diag_inv = 0.0_wp
-	do ke = 1, Nz
-	do je = 1, Ny
-	do ie = 1, Nx
-		if (grid_uniform) then
+	if (grid_uniform) then
+		do ke = 1, Nz
+		do je = 1, Ny
+		do ie = 1, Nx
 			if (elem_phase(ie,je,ke) /= MECH_POWDER) then
 				Ke_loc = Ke_solid_z(:,:,ke)
 			else
 				Ke_loc = Ke_soft_z(:,:,ke)
 			endif
-		else
+			do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+				ln = 1 + di + 2*dj + 4*dk; dof = 3*(ln-1) + 1
+				diag_inv(ie+di,je+dj,ke+dk) = diag_inv(ie+di,je+dj,ke+dk) + Ke_loc(dof,dof)
+			enddo; enddo; enddo
+		enddo
+		enddo
+		enddo
+	else
+		! Matrix-free diagonal: K_ii = sum_gp (dN_dx_i^2*(lam+2mu) + dN_dy_i^2*mu + dN_dz_i^2*mu) * detJ
+		! (for ux DOF; by symmetry same formula with permuted indices for uy, uz — use ux as approximation)
+		do ke = 1, Nz
+		do je = 1, Ny
+		do ie = 1, Nx
 			call get_elem_dx(ie, je, ke, dxe, dye, dze)
+			inv_dx = 2.0_wp/dxe; inv_dy = 2.0_wp/dye; inv_dz = 2.0_wp/dze
+			det_J = (dxe*dye*dze) / 8.0_wp
 			if (elem_phase(ie,je,ke) /= MECH_POWDER) then
-				call compute_Ke_uniform(E_solid, nu_mech, dxe, dye, dze, Ke_loc)
+				lam = E_solid*nu_mech/((1.0_wp+nu_mech)*(1.0_wp-2.0_wp*nu_mech))
+				mu  = E_solid/(2.0_wp*(1.0_wp+nu_mech))
 			else
-				call compute_Ke_uniform(E_soft, nu_mech, dxe, dye, dze, Ke_loc)
+				lam = E_soft*nu_mech/((1.0_wp+nu_mech)*(1.0_wp-2.0_wp*nu_mech))
+				mu  = E_soft/(2.0_wp*(1.0_wp+nu_mech))
 			endif
-		endif
-		do dk = 0, 1; do dj = 0, 1; do di = 0, 1
-			ln = 1 + di + 2*dj + 4*dk
-			dof = 3*(ln-1) + 1
-			diag_inv(ie+di,je+dj,ke+dk) = diag_inv(ie+di,je+dj,ke+dk) + Ke_loc(dof,dof)
-		enddo; enddo; enddo
-	enddo
-	enddo
-	enddo
+			do dk = 0, 1; do dj = 0, 1; do di = 0, 1
+				ln = 1 + di + 2*dj + 4*dk
+				diag_val = 0.0_wp
+				do g = 1, 8
+					diag_val = diag_val &
+						+ ((dNdxi_gp(ln,g)*inv_dx)**2 * (lam+2.0_wp*mu) &
+						+  (dNdeta_gp(ln,g)*inv_dy)**2 * mu &
+						+  (dNdzeta_gp(ln,g)*inv_dz)**2 * mu) * det_J
+				enddo
+				diag_inv(ie+di,je+dj,ke+dk) = diag_inv(ie+di,je+dj,ke+dk) + diag_val
+			enddo; enddo; enddo
+		enddo
+		enddo
+		enddo
+	endif
 	where (diag_inv > 1.0e-30_wp)
 		diag_inv = 1.0_wp / diag_inv
 	elsewhere
