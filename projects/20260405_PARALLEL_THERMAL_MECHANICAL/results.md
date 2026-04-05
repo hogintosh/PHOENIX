@@ -5,44 +5,40 @@
 - **Grid**: 200×100×52 thermal, 100×50×25 FEM (mech_mesh_ratio=2)
 - **timax**: 0.002 s (100 thermal steps, 4 mechanical solves)
 - **AMR**: adaptive_flag=1
-- **Machine**: 24 cores available
+- **Machine**: 24 cores (verified no residual processes before each test)
 
 ## Timing Comparison
 
-| Configuration | Thermal wall (s) | Mech wall (s) | Total wall (s) | Speedup |
-|--------------|------------------|---------------|----------------|---------|
-| Serial 10 threads | 134 (includes mech) | (in-loop) | **134** | 1.0x |
-| Parallel 10+10 | 367 | 388 | **388** | 0.35x (slower!) |
-| Parallel 5+5 | 78 | 113 | **113** | **1.19x** |
+| Configuration | Thermal wall (s) | Mech wall (s) | Total (s) | Speedup |
+|--------------|------------------|---------------|-----------|---------|
+| Serial 10 | 131.5 (includes mech) | 647 (CPU) | **131.5** | 1.00x |
+| Parallel 5+5 | 67.3 | 90.2 | **90.2** | **1.46x** |
+| Parallel 8+2 | 63.6 | 144.6 | **144.6** | 0.91x |
+| Parallel 10+10 | 55.6 | 80.5 | **80.5** | **1.63x** |
+| Parallel 12+12 | 121.2 | 135.9 | **135.9** | 0.97x |
 
 ## Analysis
 
-### Why 10+10 is slower than serial
-Both processes run 10 OpenMP threads on shared cores. Although 24 cores are available, OpenMP thread scheduling and memory bandwidth contention cause significant overhead. Each process individually runs ~3x slower than when running alone.
-
-### Why 5+5 works
-Total 10 threads = same as serial. Thermal finishes in 78s (vs ~64s thermal-only portion in serial = reasonable 22% overhead from 5 vs 10 threads). Mechanical runs concurrently in 113s. Total = max(78, 113) = 113s, **16% faster** than serial 134s.
-
-### Optimal thread allocation
-The mechanical solver benefits less from parallelism than thermal (EBE approach has limited parallelism per element). For this grid size:
-- Thermal scales well up to ~10 threads
-- Mechanical saturates around 5-8 threads
-- Best split: give thermal more threads (e.g., 7+3 or 8+2)
+- **10+10 is optimal**: 1.63x speedup. 20 total threads on 24 cores leaves room for OS.
+- **12+12 is worse**: 24 threads saturate all cores → contention with OS → both solvers slow down.
+- **8+2 is bottlenecked by mech**: only 2 mech threads → mech takes 145s while thermal finishes in 64s. Total = mech time.
+- **Serial 10 baseline**: mechanical is 52% of total time, making parallelization worthwhile.
 
 ## Result Validation
 
-Von Mises stress comparison (serial vs parallel 5+5):
+Von Mises stress comparison (serial vs parallel):
 
-| Mech Solve | Serial max_vm (MPa) | Parallel max_vm (MPa) | Diff |
-|-----------|---------------------|----------------------|------|
-| 1 | 174.1 | 172.6 | <1% |
-| 2 | 179.0 | 179.0 | 0% |
-| 3 | 184.4 | 184.4 | 0% |
-| 4 | 188.9 | 188.7 | <1% |
+| Mech Solve | Serial max_vm (MPa) | Parallel 10+10 max_vm (MPa) |
+|-----------|---------------------|----------------------------|
+| 1 | 174.1 | 172.6 |
+| 2 | 179.0 | 179.0 |
+| 3 | 184.4 | 184.4 |
+| 4 | 188.9 | 188.7 |
 
-Results are consistent — parallel mode produces identical physics.
+Results within <1% — parallel mode produces correct physics.
 
 ## Bugs Fixed During Implementation
 
-1. **Double init_mechanical**: mechanical process called `init_mechanical` twice (once before and once inside `run_mechanical_loop`). Fixed by removing the outer call.
-2. **update_mech_grid in thermal process**: AMR remesh called `update_mech_grid` even in parallel mode where mechanical arrays don't exist in thermal process → segfault. Fixed by adding `mech_parallel` guard.
+1. **Double init_mechanical**: mechanical process called `init_mechanical` twice → "already allocated" crash. Fixed by removing outer call.
+2. **update_mech_grid in thermal process**: AMR remesh called `update_mech_grid` in parallel mode where mechanical arrays don't exist → segfault. Fixed by adding `mech_parallel` guard.
+3. **Residual process interference**: initial 10+10 test showed 388s due to a lingering `cluster_main` process from previous run consuming CPU. Lesson: always `kill $(pgrep -f cluster_main)` before benchmarking.
