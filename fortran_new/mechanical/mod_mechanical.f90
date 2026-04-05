@@ -240,16 +240,16 @@ subroutine update_mech_grid()
 	fem_z(Nnz) = z(nkm1)
 
 	! (3a) Interpolate displacement fields from old grid to new grid
-	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, ux_mech)
-	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uy_mech)
-	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, uz_mech)
+	call mech_interp_node_nn(fem_x_old, fem_y_old, fem_x, fem_y, ux_mech)
+	call mech_interp_node_nn(fem_x_old, fem_y_old, fem_x, fem_y, uy_mech)
+	call mech_interp_node_nn(fem_x_old, fem_y_old, fem_x, fem_y, uz_mech)
 	ux_mech(:,:,1) = 0.0_wp; uy_mech(:,:,1) = 0.0_wp; uz_mech(:,:,1) = 0.0_wp
 
-	! (3b) Interpolate Gauss-point stress from old grid to new grid
+	! (3b) Interpolate Gauss-point stress (nearest-neighbor, no diffusion)
 	call mech_interp_gp_field(fem_x_old, fem_y_old, fem_x, fem_y, sig_gp)
 
-	! (3c) Interpolate yield function (node-centered)
-	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, f_plus)
+	! (3c) Interpolate yield function and T_old_mech (nearest-neighbor)
+	call mech_interp_node_nn(fem_x_old, fem_y_old, fem_x, fem_y, f_plus)
 
 	! Check if dx/dy are uniform (tolerance: 1% relative)
 	dx_ref = fem_x(2) - fem_x(1)
@@ -309,7 +309,7 @@ subroutine update_mech_grid()
 	! Must NOT reset to current temperature — that loses thermal strain
 	! increments accumulated since the last mechanical solve (causes
 	! displacement underestimation: e.g. 5 um → 1.7 um).
-	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, T_old_mech)
+	call mech_interp_node_nn(fem_x_old, fem_y_old, fem_x, fem_y, T_old_mech)
 
 	deallocate(fem_x_old, fem_y_old)
 
@@ -376,6 +376,61 @@ subroutine mech_interp_node_field(x_old, y_old, x_new, y_new, field)
 	field = tmp
 	deallocate(tmp)
 end subroutine mech_interp_node_field
+
+!********************************************************************
+subroutine mech_interp_node_nn(x_old, y_old, x_new, y_new, field)
+! Nearest-neighbor interpolation of a node-centered FEM field.
+! Preserves field magnitudes (no diffusion). Z unchanged.
+	real(wp), intent(in)    :: x_old(Nnx), y_old(Nny)
+	real(wp), intent(in)    :: x_new(Nnx), y_new(Nny)
+	real(wp), intent(inout) :: field(Nnx, Nny, Nnz)
+
+	real(wp), allocatable :: tmp(:,:,:)
+	integer, allocatable :: imap(:), jmap(:)
+	integer  :: i, j, k, i_near, j_near
+	real(wp) :: d1, d2
+
+	allocate(imap(Nnx), jmap(Nny))
+
+	! Build nearest-neighbor map for x
+	i_near = 1
+	do i = 1, Nnx
+		do while (i_near < Nnx)
+			d1 = abs(x_old(i_near) - x_new(i))
+			d2 = abs(x_old(i_near+1) - x_new(i))
+			if (d2 >= d1) exit
+			i_near = i_near + 1
+		enddo
+		imap(i) = i_near
+	enddo
+
+	! Build nearest-neighbor map for y
+	j_near = 1
+	do j = 1, Nny
+		do while (j_near < Nny)
+			d1 = abs(y_old(j_near) - y_new(j))
+			d2 = abs(y_old(j_near+1) - y_new(j))
+			if (d2 >= d1) exit
+			j_near = j_near + 1
+		enddo
+		jmap(j) = j_near
+	enddo
+
+	allocate(tmp(Nnx, Nny, Nnz))
+
+	!$OMP PARALLEL DO PRIVATE(i,j,k) COLLAPSE(3)
+	do k = 1, Nnz
+	do j = 1, Nny
+	do i = 1, Nnx
+		tmp(i,j,k) = field(imap(i), jmap(j), k)
+	enddo
+	enddo
+	enddo
+	!$OMP END PARALLEL DO
+
+	field = tmp
+	deallocate(tmp, imap, jmap)
+end subroutine mech_interp_node_nn
 
 !********************************************************************
 subroutine mech_interp_gp_field(x_old, y_old, x_new, y_new, gp_field)
