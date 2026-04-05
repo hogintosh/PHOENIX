@@ -210,12 +210,11 @@ subroutine init_mechanical()
 end subroutine init_mechanical
 
 !********************************************************************
-subroutine update_mech_grid(T_phoenix)
+subroutine update_mech_grid()
 ! Refresh FEM mesh after AMR remesh. AMR changes x, y coordinate values
 ! but NOT ni, nj (topology preserved), so array sizes remain valid.
-! Steps: (1) save old coords, (2) update coords, (3) interpolate u,
-! (4) update Ke, (5) recompute eps_gp, (6) refresh T_old_mech.
-	real(wp), intent(in) :: T_phoenix(:,:,:)
+! Steps: (1) save old coords, (2) update coords, (3) interpolate fields,
+! (4) update Ke, (5) recompute eps_gp, (6) interpolate T_old_mech.
 	integer :: i, j, k, ie, je, ke, di, dj, dk, ln, dof, g, p, q
 	real(wp) :: dx_ref, dy_ref, dz_ref, dxe, dye, dze
 	real(wp) :: u_e(24), B_gp(6,24), eps_curr(6)
@@ -251,8 +250,6 @@ subroutine update_mech_grid(T_phoenix)
 
 	! (3c) Interpolate yield function (node-centered)
 	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, f_plus)
-
-	deallocate(fem_x_old, fem_y_old)
 
 	! Check if dx/dy are uniform (tolerance: 1% relative)
 	dx_ref = fem_x(2) - fem_x(1)
@@ -308,8 +305,13 @@ subroutine update_mech_grid(T_phoenix)
 	enddo
 	!$OMP END PARALLEL DO
 
-	! (6) Refresh T_old_mech from current temperature on new grid.
-	call extract_temp_to_fem(T_phoenix, T_old_mech)
+	! (6) Interpolate T_old_mech from old grid to new grid.
+	! Must NOT reset to current temperature — that loses thermal strain
+	! increments accumulated since the last mechanical solve (causes
+	! displacement underestimation: e.g. 5 um → 1.7 um).
+	call mech_interp_node_field(fem_x_old, fem_y_old, fem_x, fem_y, T_old_mech)
+
+	deallocate(fem_x_old, fem_y_old)
 
 end subroutine update_mech_grid
 
