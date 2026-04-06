@@ -17,6 +17,12 @@ All output files are written to `fortran_new/result/<case_name>/`.
 | `<case>_thermal_history.png` | Temperature evolution plot | End of simulation |
 | `<case>_meltpool_history.txt` | Melt pool length, depth, width, volume, Tpeak | Every time step |
 | `<case>_meltpool_history.png` | Melt pool geometry evolution plot | End of simulation |
+| `<case>_mech_NNNNN.vtk` | Mechanical VTK (stress, displacement) | Every `mech_output_interval` solves |
+| `<case>_mech_history.txt` | Stress/displacement at monitoring points | Every mechanical solve |
+| `<case>_mech_history.png` | Stress/displacement evolution plot | End of simulation |
+| `<case>_mech_timing_report.txt` | Mechanical solver timing breakdown | End of simulation |
+| `<case>_deformation.gif` | Von Mises stress animation (10x deformation) | End of simulation |
+| `<case>_deformation_final.png` | Final stress state (high-res) | End of simulation |
 
 ## output.txt Format
 
@@ -140,3 +146,33 @@ Time-series log of melt pool geometry, recorded every timestep.
 | laser_on | Laser state (1=on, 0=off) | - |
 
 Auto-generated plot: `<case>_meltpool_history.png` (4-panel: length, depth/width, volume, Tpeak).
+
+## Mechanical Output
+
+When `mechanical_flag=1`, separate VTK files are written for mechanical results.
+
+### Mechanical VTK Fields (`<case>_mech_NNNNN.vtk`)
+
+| Field | Type | Unit | Description |
+|-------|------|------|-------------|
+| `Temperature` | scalar | K | Temperature at FEM nodes |
+| `ux`, `uy`, `uz` | scalar | m | Displacement components |
+| `phase` | integer | - | 0=powder, 1=liquid, 2=solid |
+| `sxx`, `syy`, `szz` | scalar | Pa | Normal stress components |
+| `von_mises` | scalar | Pa | Von Mises equivalent stress |
+| `fplus` | scalar | Pa | Yield function (>0 = plastic) |
+
+!!! note
+    Mechanical VTK files use a coarsened FEM grid (controlled by `mech_mesh_ratio`), separate from the thermal VTK files which use the full simulation grid.
+
+### Mechanical History
+
+Time-series log at 10 monitoring points (same as thermal history), recorded every mechanical solve.
+
+Columns: time, T(1..10), ux(1..10), uy(1..10), uz(1..10), sxx(1..10), syy(1..10)
+
+Auto-generated plots: `<case>_mech_history.png` (3-panel: temperature, displacement, stress).
+
+### Deformation Animation
+
+`<case>_deformation.gif` shows von Mises stress with 10x deformation magnification. Uses matplotlib rendering with jet colormap. Final frame also saved as `<case>_deformation_final.png` at 200 DPI.

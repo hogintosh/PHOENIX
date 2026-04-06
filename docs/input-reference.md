@@ -160,3 +160,16 @@ When `predict_flag=1`, the solver shifts enthalpy, velocity, and pressure fields
 | `remesh_interval` | integer | Regrid every N timesteps | 20 |
 
 When `adaptive_flag=1`, the mesh is regenerated every `remesh_interval` timesteps so that the refined region (cell size `amr_dx_fine`, half-extents `amr_local_half_x` x `amr_local_half_y`) follows the laser/melt pool position. Cells outside the refined region use coarser spacing.
+
+### `&mechanical_params` — Mechanical Solver
+
+| Parameter | Type | Description | Default |
+|-----------|------|-------------|---------|
+| `mechanical_flag` | integer (0 or 1) | Enable mechanical solver | 0 |
+| `mech_interval` | integer | Solve mechanical every N thermal steps | 10 |
+| `mech_output_interval` | integer | Write mechanical VTK every N mechanical solves | 5 |
+| `mech_mesh_ratio` | integer | FEM grid coarsening ratio vs thermal grid | 2 |
+
+When `mechanical_flag=1`, the EBE FEM solver computes residual stress and deformation from the thermal field. The FEM grid is coarsened from the thermal grid by `mech_mesh_ratio` (e.g., 200x200 thermal with ratio=2 gives 100x100 FEM nodes).
+
+**Parallel mode**: use `bash run.sh <case> <thermal_threads> <mech_threads>` to run thermal and mechanical as separate processes. See [Mechanical Solver](mechanics/overview.md) for details.

@@ -66,4 +66,6 @@ nav:
       - Post-Processing: modules/postprocess.md
   - Species Transport:
     - Overview: species/overview.md
+  - Mechanical Solver:
+    - Overview: mechanics/overview.md
   - Output & Visualization: output.md
