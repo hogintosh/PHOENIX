@@ -7,6 +7,8 @@ PHOENIX is a hybrid physics-based solver for simulating thermo-fluid processes i
 ## Key Features
 
 - **Multi-physics**: Coupled heat transfer, fluid flow (Navier-Stokes), phase change (melting/solidification), and species transport
+- **Residual stress**: EBE FEM mechanical solver with J2 elastoplasticity, temperature-dependent yield, and von Mises stress output
+- **Thermal-mechanical coupling**: One-way (T to stress) with serial or parallel dual-process mode for ~1.6x speedup
 - **Marangoni convection**: Surface-tension-driven flow from thermal and solutal gradients
 - **Dissimilar metal mixing**: Species transport with composition-dependent material properties (two-way coupling)
 - **Adaptive mesh**: Movable structured mesh in X-Y that follows the laser/melt pool, providing fine resolution where needed
@@ -25,6 +27,7 @@ The solver models:
 - **Surface effects**: Thermal Marangoni (dg/dT) and solutal Marangoni (dg/dC) stress on free surface
 - **Buoyancy**: Boussinesq approximation for natural convection
 - **Species transport**: Convection-diffusion of concentration field with molecular diffusivity
+- **Residual stress**: Quasi-static mechanical equilibrium with isotropic elasticity and J2 plasticity (von Mises yield with radial return mapping)
 - **Powder layer**: Distinct thermal properties for unconsolidated powder
 - **Defect prediction**: Post-simulation detection of lack-of-fusion ($T_{max} < T_s$, incomplete melting) and keyhole porosity ($T_{max} > T_b$, excessive vaporization) from peak temperature history within the build layer
 
@@ -32,8 +35,9 @@ The solver models:
 
 ```bash
 cd fortran_new
-bash compile.sh              # Build
-bash run.sh mycase 4 &       # Run with 4 OpenMP threads
+bash compile.sh                  # Build
+bash run.sh mycase 4 &           # Run with 4 threads (serial mechanical)
+bash run.sh mycase 10 10 &       # Run with 10+10 threads (parallel mechanical)
 ```
 
 Results are written to `fortran_new/result/mycase/`.
@@ -45,6 +49,7 @@ PHOENIX/
 ├── fortran_new/          # Active simulation code
 │   ├── main.f90          # Entry point
 │   ├── mod_*.f90         # Fortran modules (one per file)
+│   ├── mechanical/       # EBE FEM mechanical solver
 │   ├── compile.sh        # Build script
 │   ├── run.sh            # Run script
 │   ├── clean.sh          # Clean build artifacts
