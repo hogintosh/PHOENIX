@@ -134,6 +134,10 @@ program main
 			if (amr_needs_remesh) then
 				call cpu_time(t0)
 				call amr_regenerate_grid()
+				if (species_flag == 1) then
+					call amr_interp_field(concentration)
+					call amr_interp_field(conc_old)
+				endif
 				call update_thermal_history_indices()
 				call defect_update_map()
 				if (mechanical_flag == 1 .and. .not. mech_parallel) call update_mech_grid()
