@@ -1,0 +1,2 @@
+# Melt Pool Geometry History
+# time(s)  length(m)  depth(m)  width(m)  volume(m3)  Tpeak(K)  laser_on

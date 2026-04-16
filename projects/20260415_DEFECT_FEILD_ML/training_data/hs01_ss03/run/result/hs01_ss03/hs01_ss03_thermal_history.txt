@@ -1,0 +1,14 @@
+# Thermal History - 10 Monitoring Points
+# Columns: time(s)  T1..T10 (K)
+# Point physical coordinates:
+#  P 1:  x= 4.000E-04m  y= 1.000E-03m  z= 6.950E-04m
+#  P 2:  x= 1.000E-03m  y= 1.000E-03m  z= 6.950E-04m
+#  P 3:  x= 1.600E-03m  y= 1.000E-03m  z= 6.950E-04m
+#  P 4:  x= 1.000E-03m  y= 1.000E-03m  z= 6.600E-04m
+#  P 5:  x= 1.000E-03m  y= 1.000E-03m  z= 6.000E-04m
+#  P 6:  x= 1.000E-03m  y= 1.050E-03m  z= 6.950E-04m
+#  P 7:  x= 1.000E-03m  y= 1.200E-03m  z= 6.950E-04m
+#  P 8:  x= 1.000E-03m  y= 1.500E-03m  z= 6.950E-04m
+#  P 9:  x= 1.000E-03m  y= 1.800E-03m  z= 6.950E-04m
+#  P10:  x= 1.000E-03m  y= 1.000E-03m  z= 2.000E-04m
+#  time(s)    T 1(K)       T 2(K)       T 3(K)       T 4(K)       T 5(K)       T 6(K)       T 7(K)       T 8(K)       T 9(K)       T10(K)       
