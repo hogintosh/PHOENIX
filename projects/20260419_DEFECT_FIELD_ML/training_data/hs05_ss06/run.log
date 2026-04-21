@@ -1,0 +1,23 @@
+Traceback (most recent call last):
+  File "/home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/training_data/hs05_ss06/run/result/hs05_ss06/hs05_ss06_plot_thermal_history.py", line 6, in <module>
+    data = np.loadtxt("hs05_ss06_thermal_history.txt", comments="#")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/numpy/lib/npyio.py", line 1373, in loadtxt
+    arr = _read(fname, dtype=dtype, comment=comment, delimiter=delimiter,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/numpy/lib/npyio.py", line 1016, in _read
+    arr = _load_from_filelike(
+          ^^^^^^^^^^^^^^^^^^^^
+ValueError: the number of columns changed from 11 to 19 at row 210; use `usecols` to select a subset and avoid this error
+Traceback (most recent call last):
+  File "/home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/training_data/hs05_ss06/run/result/hs05_ss06/hs05_ss06_plot_meltpool.py", line 6, in <module>
+    data = np.loadtxt("hs05_ss06_meltpool_history.txt", comments="#")
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/numpy/lib/npyio.py", line 1373, in loadtxt
+    arr = _read(fname, dtype=dtype, comment=comment, delimiter=delimiter,
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3/dist-packages/numpy/lib/npyio.py", line 1016, in _read
+    arr = _load_from_filelike(
+          ^^^^^^^^^^^^^^^^^^^^
+ValueError: the number of columns changed from 7 to 11 at row 243; use `usecols` to select a subset and avoid this error
+Note: The following floating-point exceptions are signalling: IEEE_INVALID_FLAG IEEE_UNDERFLOW_FLAG

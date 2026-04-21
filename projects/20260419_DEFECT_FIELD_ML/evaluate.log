@@ -1,0 +1,41 @@
+=== Step 5: Evaluation ===
+Loaded models (d=4)
+Test cases: 10 interp + 10 extrap
+
+Evaluating interpolation cases:
+  interp_00: MSE=8.140e-03  R²=0.820  LOF_err=0.490%  KEP_err=0.280%  TOT_err=0.770%
+  interp_01: MSE=1.097e-02  R²=0.863  LOF_err=0.118%  KEP_err=0.011%  TOT_err=0.129%
+  interp_02: MSE=1.510e-03  R²=-0.713  LOF_err=0.450%  KEP_err=0.461%  TOT_err=0.912%
+  interp_03: MSE=6.643e-03  R²=0.909  LOF_err=0.173%  KEP_err=0.008%  TOT_err=0.165%
+  interp_04: MSE=2.005e-03  R²=0.556  LOF_err=0.131%  KEP_err=0.000%  TOT_err=0.131%
+  interp_05: MSE=1.749e-02  R²=0.121  LOF_err=0.807%  KEP_err=0.029%  TOT_err=0.778%
+  interp_06: MSE=1.151e-02  R²=0.820  LOF_err=0.588%  KEP_err=0.082%  TOT_err=0.506%
+  interp_07: MSE=2.984e-03  R²=0.325  LOF_err=0.005%  KEP_err=0.165%  TOT_err=0.170%
+  interp_08: MSE=3.903e-03  R²=0.458  LOF_err=0.051%  KEP_err=0.142%  TOT_err=0.193%
+  interp_09: MSE=2.406e-02  R²=0.602  LOF_err=1.094%  KEP_err=0.032%  TOT_err=1.062%
+
+Evaluating extrapolation cases:
+  extrap_00: MSE=3.930e-03  R²=0.698  LOF_err=0.029%  KEP_err=0.215%  TOT_err=0.186%
+  extrap_01: MSE=3.952e-01  R²=-2.694  LOF_err=7.025%  KEP_err=3.919%  TOT_err=10.945%
+  extrap_02: MSE=1.611e-02  R²=0.460  LOF_err=0.040%  KEP_err=1.222%  TOT_err=1.182%
+  extrap_03: MSE=3.032e-02  R²=0.256  LOF_err=0.177%  KEP_err=0.003%  TOT_err=0.180%
+  extrap_04: MSE=1.902e-03  R²=0.748  LOF_err=0.051%  KEP_err=0.105%  TOT_err=0.155%
+  extrap_05: MSE=3.851e-01  R²=-2.686  LOF_err=5.730%  KEP_err=4.496%  TOT_err=10.226%
+  extrap_06: MSE=1.368e-02  R²=0.679  LOF_err=0.011%  KEP_err=1.142%  TOT_err=1.130%
+  extrap_07: MSE=3.512e-02  R²=0.259  LOF_err=0.305%  KEP_err=0.001%  TOT_err=0.306%
+  extrap_08: MSE=2.367e-03  R²=0.839  LOF_err=0.025%  KEP_err=0.497%  TOT_err=0.473%
+  extrap_09: MSE=2.693e-02  R²=0.682  LOF_err=3.000%  KEP_err=2.419%  TOT_err=5.419%
+
+=== Summary ===
+  Metric                      Interpolation      Extrapolation
+  Field MSE                      8.9207e-03         9.1068e-02
+  Field R²                       4.7613e-01        -7.5916e-02
+  LOF error                      3.9066e-03         1.6393e-02
+  Keyhole error                  1.2109e-03         1.4019e-02
+  Total poro. error              4.8160e-03         3.0203e-02
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/interp_field_comparison.png
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/extrap_field_comparison.png
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/porosity_parity.png
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/error_summary.png
+
+All plots and results saved in /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results

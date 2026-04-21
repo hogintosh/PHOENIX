@@ -1,0 +1,14 @@
+=== Step 2: Autoencoder Training ===
+Loaded 100 defect arrays, shape (100, 40000)
+  d=2: rel MSE = 37.6742%  (FAIL < 1%)
+  d=3: rel MSE = 27.8517%  (FAIL < 1%)
+  d=4: rel MSE = 21.2608%  (FAIL < 1%)
+WARNING: no d meets <1% threshold, using d=4
+  Saved PCA d=2 → /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/models/autoencoder/pca_d2.pkl
+  Saved PCA d=3 → /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/models/autoencoder/pca_d3.pkl
+  Saved PCA d=4 → /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/models/autoencoder/pca_d4.pkl
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/autoencoder_training.png
+Saved /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/results/autoencoder_loss.png
+
+Autoencoder training complete. Selected latent dimension: d=4
+Models saved in /home/eva/PHOENIX/projects/20260419_DEFECT_FIELD_ML/models/autoencoder

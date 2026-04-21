@@ -1,0 +1,69 @@
+============================================
+  PHOENIX Module Timing Report
+  (CPU time accumulated in main loop)
+============================================
+  Total iterations (itertot): 81729
+  Simulation time reached:    3.428064E-02
+  Total CPU time:     3058.469 s
+  Total wall time:     3239.290 s
+  Total time used:     0  hr    53  m    59  s
+--------------------------------------------
+  Module              |   Time(s)   |   Ratio(%)
+--------------------------------------------
+           mod_discret|    1058.213  |   34.60%
+             mod_solve|     949.710  |   31.05%
+              mod_sour|     518.529  |   16.95%
+             mod_resid|     121.288  |    3.97%
+          mod_converge|      99.115  |    3.24%
+              mod_prop|      87.142  |    2.85%
+              mod_flux|      83.543  |    2.73%
+             mod_entot|      76.791  |    2.51%
+             mod_bound|      20.087  |    0.66%
+     other (copy/misc)|      18.294  |    0.60%
+            mod_revise|      18.067  |    0.59%
+        laser/toolpath|       2.025  |    0.07%
+             mod_dimen|       1.902  |    0.06%
+         adaptive mesh|       1.827  |    0.06%
+     defect (max_temp)|       1.598  |    0.05%
+             mod_print|       0.337  |    0.01%
+            mechanical|       0.000  |    0.00%
+           mod_species|       0.000  |    0.00%
+--------------------------------------------
+  Sum (check):             3058.469
+============================================
+
+  Subroutine breakdown (modules with ratio >10%)
+  Time(s) = CPU time; Ratio(%) = within module; Glob%(%) = of total
+--------------------------------------------
+  mod_sour:
+    source_momentum          101.243  |   19.53% mod |  3.31% glob
+    source_pp                 16.569  |    3.20% mod |  0.54% glob
+    source_enthalpy          400.717  |   77.28% mod | 13.10% glob
+    (mod_sour sum)           518.529
+--------------------------------------------
+  mod_discret:
+    discretize_enthalpy      521.780  |   49.31% mod | 17.06% glob
+    discretize_momentum      515.364  |   48.70% mod | 16.85% glob
+    discretize_pp             21.069  |    1.99% mod |  0.69% glob
+    (mod_discret sum)       1058.213
+--------------------------------------------
+  mod_solve:
+    solution_enthalpy        693.973  |   73.07% mod | 22.69% glob
+    solution_uvw (4x)        241.599  |   25.44% mod |  7.90% glob
+    cleanuvw                  14.138  |    1.49% mod |  0.46% glob
+    (mod_solve sum)          949.710
+--------------------------------------------
+============================================
+
+  Heating vs Cooling Stage (wall-clock)
+--------------------------------------------
+  Heating (laser on)     2157.810  s |   913 steps | 67.05%
+  Cooling (laser off)    1060.248  s |   801 steps | 32.95%
+--------------------------------------------
+
+  Adaptive Mesh
+--------------------------------------------
+  Remeshes performed:     137
+  Total AMR CPU time:         1.827 s
+  Avg per remesh:             0.013 s
+============================================

@@ -1,0 +1,43 @@
+============================================
+  PHOENIX Defect Report
+  Method: maxtemp_determ
+============================================
+
+  Defect fraction:            63.287971 %
+  Lack-of-fusion fraction:    63.287949 %
+  Keyhole porosity fraction:    0.000025 %
+
+  Defect volume:              2.27694E-11 m^3
+  Lack-of-fusion volume:      2.27694E-11 m^3
+  Keyhole porosity volume:     8.97283E-18 m^3
+  Total reference volume:      3.59775E-11 m^3
+
+  Bounding box (X-Y plane):
+    X: [ 3.93910E-04,  1.60609E-03] m
+    Y: [ 4.94920E-04,  1.50508E-03] m
+
+  Scan region convex hull (12 vertices):
+     1:  ( 1.20203E-03,  4.94920E-04) m
+     2:  ( 1.40406E-03,  6.96950E-04) m
+     3:  ( 1.60609E-03,  8.98980E-04) m
+     4:  ( 1.60609E-03,  1.10102E-03) m
+     5:  ( 1.40406E-03,  1.30305E-03) m
+     6:  ( 1.20203E-03,  1.50508E-03) m
+     7:  ( 7.97970E-04,  1.50508E-03) m
+     8:  ( 5.95940E-04,  1.30305E-03) m
+     9:  ( 3.93910E-04,  1.10102E-03) m
+    10:  ( 3.93910E-04,  8.98980E-04) m
+    11:  ( 5.95940E-04,  6.96950E-04) m
+    12:  ( 7.97970E-04,  4.94920E-04) m
+
+  Layer Z range:
+    k indices:   44 to   51
+    Z: [ 6.62500E-04,  6.97500E-04] m
+    Layer height:  4.00000E-05 m
+
+  Parameters:
+    k_lof =   0.9000
+    k_kep =   1.0000
+    T_solid   =    1563.00 K
+    T_boiling =    2650.00 K
+============================================

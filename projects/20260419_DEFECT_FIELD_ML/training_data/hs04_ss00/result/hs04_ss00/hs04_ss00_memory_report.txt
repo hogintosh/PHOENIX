@@ -1,0 +1,22 @@
+============================================
+  PHOENIX Memory Report
+  (from /proc/self/status at end of run)
+============================================
+
+  VmPeak:  194632 kB  (   190.1 MB)
+    Peak virtual memory size (all mapped memory including code, data, shared libs, swap).
+    This is the upper bound of address space ever requested. Often much larger than physical usage.
+
+  VmHWM:   189732 kB  (   185.3 MB)
+    High Water Mark — peak physical RAM (RSS) used during the entire run.
+    Best indicator of actual peak memory demand. Use this to size your machine.
+
+  VmRSS:   189732 kB  (   185.3 MB)
+    Resident Set Size — physical RAM in use at the moment of this report.
+    May be less than VmHWM if some memory was freed before program exit.
+
+  VmData:  189028 kB  (   184.6 MB)
+    Heap + stack size — memory allocated by the program (allocate, malloc).
+    Excludes code, shared libraries, and memory-mapped files.
+
+============================================
